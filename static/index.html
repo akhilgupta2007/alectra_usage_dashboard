@@ -16,14 +16,14 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
     <div class="dashboard-container">
         <!-- Sidebar/Header -->
         <header class="app-header">
             <div class="logo-area">
-                <img src="logo.png" alt="Alectra Energy Dashboard" class="logo-brand-img">
+                <img src="logo.png" alt="Alectra Energy Dashboard" class="logo-brand-img" width="38" height="38" style="width: 38px; height: 38px; min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; object-fit: cover; flex-shrink: 0; border-radius: 10px;">
                 <h1>Green Button <span>Energy Dashboard</span></h1>
             </div>
             
@@ -302,39 +302,47 @@
                 </div>
             </section>
 
-            <!-- Import History Log Table -->
-            <section class="card history-card">
-                <div class="card-header">
-                    <h2>Import History Log</h2>
-                    <span class="chart-subtitle">Log of all processed Green Button XML files and metrics</span>
+            <!-- Data & File Management Grid -->
+            <section class="data-management-grid">
+                <!-- File Upload Dropzone -->
+                <div class="card dropzone-card" id="dropzone">
+                    <div class="dropzone-content">
+                        <div class="dropzone-icon-glow">
+                            <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+                        </div>
+                        <div class="dropzone-text">
+                            <h3>Upload XML Data</h3>
+                            <p>Drag & drop or click to browse</p>
+                            <span class="dropzone-sub">Supports single or batch Green Button XML</span>
+                            <input type="file" id="fileInput" class="hidden" accept=".xml" multiple>
+                        </div>
+                    </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th>Filename</th>
-                                <th>Imported At</th>
-                                <th>File Size</th>
-                                <th>Intervals</th>
-                                <th>File Date Range</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyTableBody">
-                            <tr>
-                                <td colspan="5" class="table-empty">No files processed yet.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
 
-            <!-- File Upload Dropzone -->
-            <section class="card dropzone-card" id="dropzone">
-                <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-                <div class="dropzone-text">
-                    <h3>Drag & Drop XML Files Here</h3>
-                    <p>Or click to select a downloaded Green Button XML file from your device</p>
-                    <input type="file" id="fileInput" class="hidden" accept=".xml" multiple>
+                <!-- Import History Log Card -->
+                <div class="card history-card">
+                    <div class="history-header">
+                        <div class="history-title-area">
+                            <div class="history-icon-circle">
+                                <i data-lucide="file-check"></i>
+                            </div>
+                            <div>
+                                <h2>Import History Log</h2>
+                                <span class="history-subtitle">Processed Green Button files and interval records</span>
+                            </div>
+                        </div>
+                        <span class="history-count-badge" id="historyCountBadge">0 files</span>
+                    </div>
+                    
+                    <div class="history-scroll-container">
+                        <div class="history-list" id="historyList">
+                            <div class="history-empty">
+                                <i data-lucide="inbox"></i>
+                                <p>No files processed yet</p>
+                                <span>Imported XML files will appear here automatically.</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
@@ -432,6 +440,6 @@
     </div>
 
     <!-- Application JS -->
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>

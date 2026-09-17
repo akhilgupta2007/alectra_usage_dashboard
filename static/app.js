@@ -28,7 +28,9 @@ const scrapeFromDateInput = document.getElementById('scrapeFromDate');
 const scrapeToDateInput = document.getElementById('scrapeToDate');
 const btnTriggerManualScrape = document.getElementById('btnTriggerManualScrape');
 
-// History Table Element
+// History List Elements
+const historyList = document.getElementById('historyList');
+const historyCountBadge = document.getElementById('historyCountBadge');
 const historyTableBody = document.getElementById('historyTableBody');
 
 // Series toggle checkboxes
@@ -1007,32 +1009,84 @@ async function fetchStatus() {
             lucide.createIcons();
         }
         
-        // Populate Import History Table
-        if (status.recent_files && status.recent_files.length > 0) {
-            let tableHTML = '';
-            status.recent_files.forEach(file => {
-                const importedAtStr = formatLocalTime(file.processed_at * 1000);
-                const fileDateRangeStr = (file.start_time && file.end_time) ? 
-                    `${formatDate(file.start_time * 1000)} to ${formatDate(file.end_time * 1000)}` : 
-                    'N/A';
-                
-                tableHTML += `
-                    <tr>
-                        <td><strong>${file.filename}</strong></td>
-                        <td>${importedAtStr}</td>
-                        <td>${formatBytes(file.file_size)}</td>
-                        <td>${file.records_imported}</td>
-                        <td>${fileDateRangeStr}</td>
-                    </tr>
+        // Populate Import History List & Badge
+        const fileCount = (status.recent_files && status.recent_files.length) ? status.recent_files.length : 0;
+        if (historyCountBadge) {
+            historyCountBadge.textContent = `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+        }
+        
+        if (historyList) {
+            if (fileCount > 0) {
+                let listHTML = '';
+                status.recent_files.forEach(file => {
+                    const importedAtStr = formatLocalTime(file.processed_at * 1000);
+                    const fileDateRangeStr = (file.start_time && file.end_time) ? 
+                        `${formatDate(file.start_time * 1000)} – ${formatDate(file.end_time * 1000)}` : 
+                        'Date N/A';
+                    const intervalsCount = file.records_imported ? file.records_imported.toLocaleString() : '0';
+                    
+                    listHTML += `
+                        <div class="history-item">
+                            <div class="history-item-left">
+                                <div class="history-item-icon">
+                                    <i data-lucide="file-code"></i>
+                                </div>
+                                <div class="history-item-info">
+                                    <span class="history-item-filename" title="${file.filename}">${file.filename}</span>
+                                    <div class="history-item-meta">
+                                        <span>Imported ${importedAtStr}</span>
+                                        <span class="history-meta-dot">•</span>
+                                        <span>${formatBytes(file.file_size)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="history-item-chips">
+                                <span class="history-chip chip-date" title="Coverage Period">
+                                    <i data-lucide="calendar"></i> ${fileDateRangeStr}
+                                </span>
+                                <span class="history-chip chip-intervals" title="Processed Intervals">
+                                    <i data-lucide="layers"></i> ${intervalsCount} pts
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                });
+                historyList.innerHTML = listHTML;
+                lucide.createIcons();
+            } else {
+                historyList.innerHTML = `
+                    <div class="history-empty">
+                        <i data-lucide="inbox"></i>
+                        <p>No files processed yet</p>
+                        <span>Imported XML files will appear here automatically.</span>
+                    </div>
                 `;
-            });
-            historyTableBody.innerHTML = tableHTML;
-        } else {
-            historyTableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="table-empty">No files processed yet.</td>
-                </tr>
-            `;
+                lucide.createIcons();
+            }
+        }
+        
+        if (historyTableBody) {
+            if (fileCount > 0) {
+                let tableHTML = '';
+                status.recent_files.forEach(file => {
+                    const importedAtStr = formatLocalTime(file.processed_at * 1000);
+                    const fileDateRangeStr = (file.start_time && file.end_time) ? 
+                        `${formatDate(file.start_time * 1000)} to ${formatDate(file.end_time * 1000)}` : 
+                        'N/A';
+                    tableHTML += `
+                        <tr>
+                            <td><strong>${file.filename}</strong></td>
+                            <td>${importedAtStr}</td>
+                            <td>${formatBytes(file.file_size)}</td>
+                            <td>${file.records_imported}</td>
+                            <td>${fileDateRangeStr}</td>
+                        </tr>
+                    `;
+                });
+                historyTableBody.innerHTML = tableHTML;
+            } else {
+                historyTableBody.innerHTML = `<tr><td colspan="5" class="table-empty">No files processed yet.</td></tr>`;
+            }
         }
     } catch (e) {
         console.error("Error fetching status:", e);

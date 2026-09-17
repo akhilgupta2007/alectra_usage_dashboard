@@ -32,6 +32,21 @@ Visualize your 15-minute smart meter intervals, track Time-of-Use (TOU) and Tier
 
 ---
 
+## 📸 Screenshots & Showcase
+
+### 1. Interactive Multi-Day Energy Dashboard (Ontario TOU Rates)
+![Alectra Dashboard Main View](docs/images/dashboard_main.png)
+
+### 2. Dynamic 15-Minute Zoom & Click Drill-Down
+![15-Minute Interval Drill-Down](docs/images/drilldown_15min.png)
+
+### 3. Detailed Interval Tooltips & Runtime Settings
+| Interactive Hover Tooltip with Total Row | Scraper, Time-Shift & Settings Modal |
+| :---: | :---: |
+| ![Tooltip Breakdown](docs/images/tooltip_breakdown.png) | ![Settings Modal](docs/images/settings_modal.png) |
+
+---
+
 ## 🚀 Deployment Options
 
 ### Option 1: Deploy with Pre-built Image (Container Registry)

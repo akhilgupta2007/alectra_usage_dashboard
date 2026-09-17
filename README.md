@@ -1,5 +1,10 @@
 # Alectra Green Button Energy Dashboard ⚡
 
+[![Build and Publish Container Image](https://github.com/akhilgupta2007/alectra_usage_dashboard/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/akhilgupta2007/alectra_usage_dashboard/actions/workflows/docker-publish.yml)
+![Docker Image](https://img.shields.io/badge/ghcr.io-akhilgupta2007%2Falectra__usage__dashboard-blue?logo=docker)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Memory Limit](https://img.shields.io/badge/RAM_Limit-%3C500MB-emerald)
+
 A modern, self-hosted energy analytics dashboard and automated scraper for **Alectra Utilities** customers. Built with FastAPI, SQLite, Playwright, and ApexCharts, packaged into a lightweight, memory-efficient Docker container.
 
 Visualize your 15-minute smart meter intervals, track Time-of-Use (TOU) and Tiered electricity costs, monitor net grid balance (solar import vs. export), and integrate directly with AI assistants via the **Model Context Protocol (MCP)**.
@@ -27,20 +32,18 @@ Visualize your 15-minute smart meter intervals, track Time-of-Use (TOU) and Tier
 
 ---
 
----
-
 ## 🚀 Deployment Options
 
 ### Option 1: Deploy with Pre-built Image (Container Registry)
 
-If you don't want to build from source, you can deploy immediately on any Docker host (NAS, Synology, Unraid, Raspberry Pi, VPS) using only a `docker-compose.yml` file:
+You can deploy immediately on any Docker host (NAS, Synology, Unraid, Raspberry Pi, VPS) using only a `docker-compose.yml` file without needing the source code:
 
 ```yaml
 version: '3.8'
 
 services:
   dashboard:
-    image: ghcr.io/yourusername/alectra-dashboard:latest
+    image: ghcr.io/akhilgupta2007/alectra_usage_dashboard:latest
     container_name: alectra_usage_dashboard
     ports:
       - "8080:8000"
@@ -48,7 +51,7 @@ services:
       - ./data:/app/data
     environment:
       - TZ=America/Toronto
-      - ACCOUNT_NAME=John Doe
+      - ACCOUNT_NAME=Your Full Name
       - ACCOUNT_NUMBER=123456789
       - PHONE_NUMBER=905-555-1234
       - METER_NUMBER=
@@ -66,19 +69,19 @@ docker compose pull
 docker compose up -d
 ```
 
-Or deploy as a single `docker run` command:
+Or deploy with a single `docker run` command:
 ```bash
 docker run -d \
   --name alectra_dashboard \
   -p 8080:8000 \
   -v $(pwd)/data:/app/data \
   -e TZ=America/Toronto \
-  -e ACCOUNT_NAME="John Doe" \
+  -e ACCOUNT_NAME="Your Full Name" \
   -e ACCOUNT_NUMBER="123456789" \
   -e PHONE_NUMBER="905-555-1234" \
   --memory=500m \
   --restart unless-stopped \
-  ghcr.io/yourusername/alectra-dashboard:latest
+  ghcr.io/akhilgupta2007/alectra_usage_dashboard:latest
 ```
 
 ---
@@ -87,8 +90,8 @@ docker run -d \
 
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/alectra-usage-dashboard.git
-cd alectra-usage-dashboard
+git clone https://github.com/akhilgupta2007/alectra_usage_dashboard.git
+cd alectra_usage_dashboard
 ```
 
 #### 2. Configure Environment Variables
@@ -106,38 +109,28 @@ Access the dashboard at `http://localhost:8080`.
 
 ---
 
-## 📦 Building & Publishing to a Container Registry
+## 📦 Building & Publishing to Container Registry
 
-### A. Automated via GitHub Actions (Recommended)
-This repository includes `.github/workflows/docker-publish.yml`. When you push your code to GitHub:
+### A. Automated via GitHub Actions
+This repository includes [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml). Every time you push a commit or release tag to GitHub:
 1. GitHub Actions automatically builds the Docker image.
-2. The image is published directly to **GitHub Container Registry** (`ghcr.io/<your-username>/<repo-name>:latest`).
-3. You can set the package to **Public** in GitHub under `Packages` so any server or NAS can pull it without logging in.
+2. The image is published directly to **GitHub Container Registry**:
+   ```
+   ghcr.io/akhilgupta2007/alectra_usage_dashboard:latest
+   ```
 
-### B. Manual Build & Push (Docker Hub / GHCR)
-
-To manually build and push to Docker Hub:
-```bash
-# 1. Log in to Docker Hub
-docker login
-
-# 2. Build the image
-docker build -t yourusername/alectra-dashboard:latest .
-
-# 3. Push to registry
-docker push yourusername/alectra-dashboard:latest
-```
+### B. Manual Build & Push (GHCR / Docker Hub)
 
 To manually push to GitHub Container Registry:
 ```bash
-# 1. Log in to GHCR with a Personal Access Token (PAT with write:packages)
-echo $CR_PAT | docker login ghcr.io -u yourusername --password-stdin
+# 1. Log in to GHCR with your GitHub Personal Access Token (PAT with write:packages)
+echo $CR_PAT | docker login ghcr.io -u akhilgupta2007 --password-stdin
 
 # 2. Build and tag
-docker build -t ghcr.io/yourusername/alectra-dashboard:latest .
+docker build -t ghcr.io/akhilgupta2007/alectra_usage_dashboard:latest .
 
 # 3. Push
-docker push ghcr.io/yourusername/alectra-dashboard:latest
+docker push ghcr.io/akhilgupta2007/alectra_usage_dashboard:latest
 ```
 
 ---

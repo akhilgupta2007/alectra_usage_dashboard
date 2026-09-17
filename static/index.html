@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alectra Green Button Energy Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar/Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <i data-lucide="zap" class="logo-icon"></i>
+                <h1>Green Button <span>Energy Dashboard</span></h1>
+            </div>
+            
+            <div class="sync-status" id="syncStatus">
+                <div class="pulse-dot idle"></div>
+                <span class="status-text">Status: Checking...</span>
+            </div>
+            
+            <div class="header-actions">
+                <button class="btn btn-secondary btn-icon" id="btnSettings" title="Settings">
+                    <i data-lucide="settings"></i>
+                </button>
+                <button class="btn btn-primary" id="btnSync">
+                    <i data-lucide="refresh-cw" class="icon-spin-hover"></i> Sync Folder
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- KPI Summary Cards -->
+            <section class="kpi-grid">
+                <div class="card kpi-card card-consumption">
+                    <div class="card-icon"><i data-lucide="arrow-down-right"></i></div>
+                    <div class="card-info">
+                        <h3>Total Grid Import</h3>
+                        <p class="kpi-value" id="kpiConsumption">0.00 <span class="kpi-unit">kWh</span></p>
+                        <p class="kpi-subtext" id="kpiConsumptionCost">Cost: $0.00</p>
+                    </div>
+                </div>
+                
+                <div class="card kpi-card card-production">
+                    <div class="card-icon"><i data-lucide="arrow-up-left"></i></div>
+                    <div class="card-info">
+                        <h3>Total Grid Export</h3>
+                        <p class="kpi-value" id="kpiProduction">0.00 <span class="kpi-unit">kWh</span></p>
+                        <p class="kpi-subtext" id="kpiProductionCost">Credit: $0.00</p>
+                    </div>
+                </div>
+                
+                <div class="card kpi-card card-net">
+                    <div class="card-icon"><i data-lucide="activity"></i></div>
+                    <div class="card-info">
+                        <h3>Net Grid Balance</h3>
+                        <p class="kpi-value" id="kpiNet">0.00 <span class="kpi-unit">kWh</span></p>
+                        <p class="kpi-subtext" id="kpiNetCost">Net Cost: $0.00</p>
+                    </div>
+                </div>
+                
+                <div class="card kpi-card card-peak">
+                    <div class="card-icon"><i data-lucide="trending-up"></i></div>
+                    <div class="card-info">
+                        <h3>Peak Demand</h3>
+                        <p class="kpi-value" id="kpiPeak">0.00 <span class="kpi-unit">kW</span></p>
+                        <p class="kpi-subtext">Highest Interval</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chart Options Panel -->
+            <section class="card filter-card">
+                <div class="filter-controls">
+                    <div class="control-group">
+                        <label for="dateRange"><i data-lucide="calendar"></i> Date Range</label>
+                        <select id="dateRange">
+                            <option value="latest_day">Latest Day</option>
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                            <option value="year_to_date">Year to Date</option>
+                            <option value="all_time">All Time</option>
+                            <option value="custom">Custom Range...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group custom-date-group hidden" id="customDateGroup">
+                        <label for="customStart">Start / End Date</label>
+                        <div class="date-inputs">
+                            <input type="date" id="customStart">
+                            <span class="date-separator">to</span>
+                            <input type="date" id="customEnd">
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="resolution"><i data-lucide="bar-chart-2"></i> Interval Resolution</label>
+                        <select id="resolution">
+                            <option value="15min">15 Minutes</option>
+                            <option value="1h">Hourly</option>
+                            <option value="1d" selected>Daily</option>
+                            <option value="1m">Monthly</option>
+                            <option value="1y">Yearly</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label><i data-lucide="layers"></i> Display Series</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="chkShowImport" checked> Import (Grid)
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="chkShowExport" checked> Export (Solar)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Main Charts Card -->
+            <section class="card chart-card">
+                <div class="card-header-flex">
+                    <div class="card-header">
+                        <h2>Electricity Import & Export</h2>
+                        <span class="chart-subtitle" id="chartSubtitle">All quantities represent consumption in kWh or power in kW</span>
+                        <div id="drilldownBadge" class="drilldown-badge hidden">
+                            <span><i data-lucide="zoom-in" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i> Drill-Down: <strong id="drilldownLabel">Day</strong></span>
+                            <button type="button" id="btnResetDrilldown" class="btn-reset-drilldown">✕ Reset Zoom</button>
+                        </div>
+                    </div>
+                    <div class="chart-controls-group">
+                        <div class="toggle-group" id="chartTypeToggle" title="Chart Style">
+                            <button class="btn btn-secondary active" id="btnStyleBar" title="Column / Stacked Bars"><i data-lucide="bar-chart-2"></i> Bars</button>
+                            <button class="btn btn-secondary" id="btnStyleArea" title="Continuous Area Curves"><i data-lucide="trending-up"></i> Area</button>
+                        </div>
+
+                        <div class="toggle-group" id="viewToggle">
+                            <button class="btn btn-secondary active" id="btnViewEnergy">Energy (kWh)</button>
+                            <button class="btn btn-secondary" id="btnViewCost">Cost ($)</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="rate-legend-bar" id="rateLegendBar">
+                    <span class="rate-badge badge-onpeak"><span class="badge-dot"></span> On-Peak</span>
+                    <span class="rate-badge badge-midpeak"><span class="badge-dot"></span> Mid-Peak</span>
+                    <span class="rate-badge badge-offpeak"><span class="badge-dot"></span> Off-Peak</span>
+                    <span class="rate-badge badge-ulo" id="legendUlo" style="display: none;"><span class="badge-dot"></span> Ultra-Low Overnight</span>
+                    <span class="rate-badge badge-tier1" id="legendTier1" style="display: none;"><span class="badge-dot"></span> Tier 1</span>
+                    <span class="rate-badge badge-tier2" id="legendTier2" style="display: none;"><span class="badge-dot"></span> Tier 2</span>
+                    <span class="rate-badge badge-export" id="legendExport" style="display: none;"><span class="badge-dot"></span> Export (Solar)</span>
+                </div>
+                
+                <div class="chart-container">
+                    <div id="chart"></div>
+                    <div class="loading-overlay hidden" id="chartLoading">
+                        <div class="spinner"></div>
+                        <span>Loading Data...</span>
+                    </div>
+                    <div class="empty-overlay hidden" id="chartEmpty">
+                        <i data-lucide="inbox"></i>
+                        <span>No data found for the selected range. Drag and drop XML files below to import!</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rate & Tier Breakdown Card -->
+            <section class="card tou-card hidden" id="touCard">
+                <div class="card-header">
+                    <h2>Rate & Tier Breakdown</h2>
+                    <span class="chart-subtitle">Distribution of grid energy consumption and estimated cost across Time-of-Use rates and billing tiers</span>
+                </div>
+                
+                <div class="breakdown-grid">
+                    <!-- TOU Rates Section -->
+                    <div class="tou-stats-container" id="touStatsSection">
+                        <h3>Time-of-Use Rates</h3>
+                        <div class="tou-stat-item">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-on-peak">On-Peak</span>
+                                <span id="touOnPeakVal">0.00 kWh (0%)</span>
+                                <span id="touOnPeakCost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill on-peak-fill" id="touOnPeakFill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-mid-peak">Mid-Peak</span>
+                                <span id="touMidPeakVal">0.00 kWh (0%)</span>
+                                <span id="touMidPeakCost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill mid-peak-fill" id="touMidPeakFill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-off-peak">Off-Peak</span>
+                                <span id="touOffPeakVal">0.00 kWh (0%)</span>
+                                <span id="touOffPeakCost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill off-peak-fill" id="touOffPeakFill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item hidden" id="touUloGroup">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-ulo">Ultra-Low Overnight</span>
+                                <span id="touUloVal">0.00 kWh (0%)</span>
+                                <span id="touUloCost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill ulo-fill" id="touUloFill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item hidden" id="touOtherGroup">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-other">Other / Flat</span>
+                                <span id="touOtherVal">0.00 kWh (0%)</span>
+                                <span id="touOtherCost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill other-fill" id="touOtherFill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item tou-total-item" id="touTotalGroup">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-total-badge">Total</span>
+                                <span id="touTotalVal" class="breakdown-total-val">0.00 kWh</span>
+                                <span id="touTotalCost" class="breakdown-total-cost">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tiered Usage Section -->
+                    <div class="tou-stats-container" id="tierStatsSection">
+                        <h3>Consumption Tiers</h3>
+                        <div class="tou-stat-item">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-tier-1">Tier 1</span>
+                                <span id="tier1Val">0.00 kWh (0%)</span>
+                                <span id="tier1Cost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill tier-1-fill" id="tier1Fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-tier-2">Tier 2</span>
+                                <span id="tier2Val">0.00 kWh (0%)</span>
+                                <span id="tier2Cost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill tier-2-fill" id="tier2Fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-tier-3">Tier 3</span>
+                                <span id="tier3Val">0.00 kWh (0%)</span>
+                                <span id="tier3Cost">$0.00</span>
+                            </div>
+                            <div class="tou-progress-bar">
+                                <div class="tou-progress-fill tier-3-fill" id="tier3Fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="tou-stat-item tou-total-item" id="tierTotalGroup">
+                            <div class="tou-stat-meta">
+                                <span class="tou-label tou-total-badge">Total</span>
+                                <span id="tierTotalVal" class="breakdown-total-val">0.00 kWh</span>
+                                <span id="tierTotalCost" class="breakdown-total-cost">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Import History Log Table -->
+            <section class="card history-card">
+                <div class="card-header">
+                    <h2>Import History Log</h2>
+                    <span class="chart-subtitle">Log of all processed Green Button XML files and metrics</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Imported At</th>
+                                <th>File Size</th>
+                                <th>Intervals</th>
+                                <th>File Date Range</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr>
+                                <td colspan="5" class="table-empty">No files processed yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- File Upload Dropzone -->
+            <section class="card dropzone-card" id="dropzone">
+                <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+                <div class="dropzone-text">
+                    <h3>Drag & Drop XML Files Here</h3>
+                    <p>Or click to select a downloaded Green Button XML file from your device</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".xml" multiple>
+                </div>
+            </section>
+        </main>
+        
+        <!-- Settings Modal Overlay -->
+        <div class="modal-overlay hidden" id="settingsModal">
+            <div class="modal-content card">
+                <div class="modal-header">
+                    <h2><i data-lucide="settings"></i> Dashboard Settings</h2>
+                    <button class="btn btn-icon btn-close" id="btnCloseSettings">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <form id="settingsForm">
+                        <div class="form-group">
+
+                            <label for="scanIntervalMinutes">Folder Scan Interval (Minutes)</label>
+                            <div class="time-shift-input-container">
+                                <input type="number" id="scanIntervalMinutes" class="form-control" min="1" step="1" value="60">
+                                <span class="form-help-inline">minutes</span>
+                            </div>
+                            <span class="form-help">Frequency at which the shared directory is scanned for new files.</span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="archiveRetentionDays">Archive Retention (Days)</label>
+                            <div class="time-shift-input-container">
+                                <input type="number" id="archiveRetentionDays" class="form-control" min="1" step="1" value="60">
+                                <span class="form-help-inline">days</span>
+                            </div>
+                            <span class="form-help">Processed XML files are moved to an 'archive' subfolder. Files older than this are cleaned.</span>
+                        </div>
+                        
+
+                        <div class="form-group">
+                            <label for="timeShiftHours">Time Drift Offset (Hours)</label>
+                            <div class="time-shift-input-container">
+                                <input type="number" id="timeShiftHours" class="form-control" step="0.5" value="0">
+                                <span class="form-help-inline">hours</span>
+                            </div>
+                            <span class="form-help">Default is 0 (automatic XML timezone &amp; Daylight Saving Time detection). Only adjust if your meter has manual clock drift.</span>
+                        </div>
+                        
+                        <!-- Alectra Scraper Settings -->
+                        <div class="settings-section">
+                            <h3>Alectra Scraper Control</h3>
+                            
+                            <div class="form-group">
+                                <label for="scraperRunTime">Daily Scrape Time</label>
+                                <input type="time" id="scraperRunTime" class="form-control" value="06:00">
+                                <span class="form-help">The time of day when the scraper will automatically run to fetch utility data.</span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Credentials Configuration Status</label>
+                                <div id="scraperConfigStatus" class="config-status">Checking credentials...</div>
+                            </div>
+                            
+                            <div class="form-group border-top pt-3">
+                                <label>Manual One-Time Scrape</label>
+                                <div class="date-inputs mt-2">
+                                    <div>
+                                        <span class="form-label-small">From Date</span>
+                                        <input type="date" id="scrapeFromDate" class="form-control">
+                                    </div>
+                                    <div>
+                                        <span class="form-label-small">To Date</span>
+                                        <input type="date" id="scrapeToDate" class="form-control">
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-secondary mt-2" id="btnTriggerManualScrape">
+                                    <i data-lucide="play"></i> Trigger Manual Scrape
+                                </button>
+                                <span class="form-help">Downloads utility data for the specified date range and processes it. Playwright operates in headless background mode; this might take a minute.</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary" id="btnSaveSettings">Save Settings</button>
+                        </div>
+                    </form>
+                    
+                    <div class="danger-zone">
+                        <h3>Danger Zone</h3>
+                        <p>If you modified your Time Drift Offset, you must wipe the database and re-process all your files in the shared folder to align historical charts.</p>
+                        <button class="btn btn-danger" id="btnReimport">
+                            <i data-lucide="trash-2"></i> Wipe & Re-import All Files
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JS -->
+    <script src="app.js"></script>
+</body>
+</html>

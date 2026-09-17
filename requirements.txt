@@ -1,0 +1,6 @@
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-multipart>=0.0.6
+playwright==1.44.0
+tzdata
+mcp>=1.0.0

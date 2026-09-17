@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    container_name: alectra_usage_dashboard
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Timezone configuration
+      - TZ=America/Toronto
+      # Scraper Login Credentials & Parameters
+      - ACCOUNT_NAME=Your Full Name
+      - ACCOUNT_NUMBER=123456789
+      - PHONE_NUMBER=905-555-1234
+      - METER_NUMBER= # Optional: only needed if your account has multiple meters
+      - LOGIN_PORTAL_URL=https://alectrautilitiesgbportal.savagedata.com/Connect/Authorize
+      - SCRAPE_ON_STARTUP=true
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 500M

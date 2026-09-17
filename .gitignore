@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite Databases & runtime files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+green_button.db
+
+# Green Button XML data & downloads
+data/
+archive/
+temp_*.xml
+*.xml
+
+# Sensitive environment credentials
+.env
+.env.local
+.env.*.local
+
+# Scraper browser profiles & downloads
+playwright/
+.playwright/
+downloads/
+
+# Logs
+*.log
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Editor & IDE directories
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -904,5 +904,6 @@ except Exception as e:
 # Mount Static frontend files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static_files")
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 

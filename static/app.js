@@ -95,12 +95,14 @@ function formatBytes(bytes) {
 // Helper: Format Date/Time for display (using UTC face values for interval times)
 function formatDate(timestampMs) {
     const d = new Date(timestampMs);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const day = days[d.getUTCDay()];
     const yr = d.getUTCFullYear();
     const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
     const da = String(d.getUTCDate()).padStart(2, '0');
     const hr = String(d.getUTCHours()).padStart(2, '0');
     const mi = String(d.getUTCMinutes()).padStart(2, '0');
-    return `${yr}-${mo}-${da} ${hr}:${mi}`;
+    return `${day}, ${yr}-${mo}-${da} ${hr}:${mi}`;
 }
 
 // Helper: Format Date/Time using local browser timezone for actual processing times
@@ -605,7 +607,14 @@ function renderChart(data) {
         xaxis: {
             type: 'datetime',
             labels: {
-                datetimeUTC: true
+                datetimeUTC: true,
+                format: curRes === '1d' ? 'ddd, dd MMM' : (curRes === '1h' || curRes === '15min' ? 'ddd HH:mm' : 'MMM yyyy'),
+                datetimeFormatter: {
+                    year: 'yyyy',
+                    month: "MMM 'yy",
+                    day: 'ddd, dd MMM',
+                    hour: 'ddd HH:mm'
+                }
             }
         },
         yaxis: {
@@ -627,7 +636,9 @@ function renderChart(data) {
                 let headerDateStr = '';
                 if (xVal) {
                     const d = new Date(xVal);
+                    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const day = days[d.getUTCDay()];
                     const yr = d.getUTCFullYear();
                     const mo = months[d.getUTCMonth()];
                     const da = String(d.getUTCDate()).padStart(2, '0');
@@ -638,11 +649,11 @@ function renderChart(data) {
                     } else if (curRes === '1m') {
                         headerDateStr = `${mo} ${yr}`;
                     } else if (curRes === '1d') {
-                        headerDateStr = `${da} ${mo} ${yr}`;
+                        headerDateStr = `${day}, ${da} ${mo} ${yr}`;
                     } else if (curRes === '1h') {
-                        headerDateStr = `${da} ${mo} ${yr} ${hr}:00`;
+                        headerDateStr = `${day}, ${da} ${mo} ${yr} ${hr}:00`;
                     } else {
-                        headerDateStr = `${da} ${mo} ${yr} ${hr}:${mi}`;
+                        headerDateStr = `${day}, ${da} ${mo} ${yr} ${hr}:${mi}`;
                     }
                 }
 
@@ -840,9 +851,10 @@ async function fetchDrillDownData(startSec, endSec, targetRes) {
 
         const dStart = new Date(startSec * 1000);
         const dEnd = new Date(endSec * 1000);
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        const labelStart = `${dStart.getUTCDate()} ${months[dStart.getUTCMonth()]} ${dStart.getUTCFullYear()}`;
-        const labelEnd = `${dEnd.getUTCDate()} ${months[dEnd.getUTCMonth()]} ${dEnd.getUTCFullYear()}`;
+        const labelStart = `${days[dStart.getUTCDay()]}, ${dStart.getUTCDate()} ${months[dStart.getUTCMonth()]} ${dStart.getUTCFullYear()}`;
+        const labelEnd = `${days[dEnd.getUTCDay()]}, ${dEnd.getUTCDate()} ${months[dEnd.getUTCMonth()]} ${dEnd.getUTCFullYear()}`;
 
         let dateLabel = labelStart;
         if (labelStart !== labelEnd && (endSec - startSec) > 86400) {

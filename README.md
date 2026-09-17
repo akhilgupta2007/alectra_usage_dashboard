@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/logo.png" alt="Alectra Energy Dashboard" width="100" style="border-radius: 22px; box-shadow: 0 12px 28px rgba(0,0,0,0.6);" />
+</p>
+
 # Alectra Green Button Energy Dashboard ⚡
 
 [![Build and Publish Container Image](https://github.com/akhilgupta2007/alectra_usage_dashboard/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/akhilgupta2007/alectra_usage_dashboard/actions/workflows/docker-publish.yml)

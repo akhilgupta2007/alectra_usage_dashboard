@@ -77,6 +77,114 @@ let isDrillDownActive = false;
 let preDrillDownState = null;
 let isDrillDownLoading = false;
 
+// Error Toast & Modal Elements
+const errorToast = document.getElementById('errorToast');
+const errorToastContent = document.getElementById('errorToastContent');
+const errorToastTitle = document.getElementById('errorToastTitle');
+const errorToastMsg = document.getElementById('errorToastMsg');
+const btnToastDetails = document.getElementById('btnToastDetails');
+const btnDismissToast = document.getElementById('btnDismissToast');
+
+const errorModal = document.getElementById('errorModal');
+const errorModalTitle = document.getElementById('errorModalTitle');
+const errorModalMessage = document.getElementById('errorModalMessage');
+const btnCloseErrorModal = document.getElementById('btnCloseErrorModal');
+const btnCopyError = document.getElementById('btnCopyError');
+const btnCopyErrorText = document.getElementById('btnCopyErrorText');
+const btnClearError = document.getElementById('btnClearError');
+
+let activeErrorMessage = '';
+let activeErrorTitle = '';
+let userDismissedError = false;
+
+function showErrorToast(message, title = "Error Occurred") {
+    if (!message) return;
+    activeErrorMessage = message;
+    activeErrorTitle = title;
+    
+    if (errorToastTitle) errorToastTitle.textContent = title;
+    if (errorToastMsg) errorToastMsg.textContent = message;
+    if (errorToast) errorToast.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+}
+
+function hideErrorToast() {
+    if (errorToast) errorToast.classList.add('hidden');
+}
+
+function openErrorModal() {
+    if (!activeErrorMessage) return;
+    if (errorModalTitle) errorModalTitle.textContent = activeErrorTitle || "Error Details";
+    if (errorModalMessage) errorModalMessage.textContent = activeErrorMessage;
+    if (errorModal) errorModal.classList.remove('hidden');
+    if (btnCopyErrorText) btnCopyErrorText.textContent = "Copy Error";
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeErrorModal() {
+    if (errorModal) errorModal.classList.add('hidden');
+}
+
+async function clearErrorGlobally() {
+    hideErrorToast();
+    closeErrorModal();
+    activeErrorMessage = '';
+    userDismissedError = true;
+    
+    try {
+        await fetch('/api/status/clear-error', { method: 'POST' });
+        await fetchStatus();
+    } catch (e) {
+        console.error("Failed to clear error on server:", e);
+    }
+}
+
+// Attach Error Toast & Modal Event Listeners
+if (errorToastContent) {
+    errorToastContent.addEventListener('click', openErrorModal);
+}
+if (btnToastDetails) {
+    btnToastDetails.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openErrorModal();
+    });
+}
+if (btnDismissToast) {
+    btnDismissToast.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearErrorGlobally();
+    });
+}
+if (btnCloseErrorModal) {
+    btnCloseErrorModal.addEventListener('click', closeErrorModal);
+}
+if (btnClearError) {
+    btnClearError.addEventListener('click', clearErrorGlobally);
+}
+if (btnCopyError) {
+    btnCopyError.addEventListener('click', async () => {
+        if (!activeErrorMessage) return;
+        try {
+            await navigator.clipboard.writeText(activeErrorMessage);
+            if (btnCopyErrorText) btnCopyErrorText.textContent = "✓ Copied!";
+            setTimeout(() => {
+                if (btnCopyErrorText) btnCopyErrorText.textContent = "Copy Error";
+            }, 2500);
+        } catch (err) {
+            const textarea = document.createElement('textarea');
+            textarea.value = activeErrorMessage;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            if (btnCopyErrorText) btnCopyErrorText.textContent = "✓ Copied!";
+            setTimeout(() => {
+                if (btnCopyErrorText) btnCopyErrorText.textContent = "Copy Error";
+            }, 2500);
+        }
+    });
+}
+
 // Initialize Lucide icons
 lucide.createIcons();
 
@@ -948,6 +1056,9 @@ async function fetchDashboardData() {
     
     try {
         const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+        }
         globalData = await res.json();
         
         renderChart(globalData);
@@ -955,6 +1066,7 @@ async function fetchDashboardData() {
         updateTOUBreakdown(globalData);
     } catch (e) {
         console.error("Error fetching data:", e);
+        showErrorToast(`Failed to load energy data: ${e.message || e}`, "Dashboard Data Error");
     } finally {
         chartLoading.classList.add('hidden');
     }
@@ -985,7 +1097,6 @@ async function fetchStatus() {
         archiveRetentionDaysInput.value = status.archive_retention_days;
         timeShiftHoursInput.value = status.time_shift_hours;
 
-        
         // Update Scraper Settings UI
         scraperRunTimeInput.value = status.scraper_run_time || '06:00';
         
@@ -997,6 +1108,25 @@ async function fetchStatus() {
         } else {
             scraperConfigStatusEl.className = 'config-status missing';
             scraperConfigStatusEl.innerHTML = `✗ Missing Credentials<br>Set ACCOUNT_NAME, ACCOUNT_NUMBER, and PHONE_NUMBER in docker-compose.yml`;
+        }
+
+        // Smart Notification Check: Detect background scraper, sync, or system error
+        const scraperErr = status.last_scraper_error;
+        const generalErr = status.last_error;
+        const isRealScraperErr = scraperErr && !scraperErr.startsWith("Running ");
+        const effectiveErr = isRealScraperErr ? scraperErr : (generalErr || '');
+
+        if (effectiveErr) {
+            if (!userDismissedError || effectiveErr !== activeErrorMessage) {
+                userDismissedError = false;
+                const errTitle = isRealScraperErr ? "Alectra Scraper Error" : "Data / Sync Error";
+                showErrorToast(effectiveErr, errTitle);
+            }
+        } else {
+            if (!userDismissedError) {
+                hideErrorToast();
+                closeErrorModal();
+            }
         }
         
         // Update manual scrape button status dynamically depending on scraper_active status
@@ -1273,10 +1403,12 @@ btnTriggerManualScrape.addEventListener('click', async () => {
                 }
             }, 15000);
         } else {
+            showErrorToast(result.message || "Failed to trigger scraper", "Scraper Error");
             alert(`Failed to trigger scraper: ${result.message}`);
         }
     } catch (err) {
         console.error("Scraper run request failed:", err);
+        showErrorToast("Failed to trigger scraper: " + (err.message || err), "Network Error");
         alert("Failed to trigger scraper. Check console logs.");
     } finally {
         await fetchStatus();
@@ -1462,4 +1594,13 @@ window.addEventListener('load', () => {
     syncResolutionOptions();
     fetchStatus();
     fetchDashboardData();
+
+    // Auto-open calendar / time picker when clicking anywhere on date / time fields
+    document.querySelectorAll('input[type="date"], input[type="time"]').forEach(input => {
+        input.addEventListener('click', () => {
+            if (typeof input.showPicker === 'function') {
+                try { input.showPicker(); } catch (_) {}
+            }
+        });
+    });
 });

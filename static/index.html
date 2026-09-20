@@ -437,9 +437,53 @@
                 </div>
             </div>
         </div>
+
+        <!-- Smart Error Alert Toast (Top-Right) -->
+        <div id="errorToast" class="error-toast hidden">
+            <div class="error-toast-icon">
+                <i data-lucide="alert-triangle"></i>
+            </div>
+            <div class="error-toast-content" id="errorToastContent" title="Click to view full error details">
+                <div class="error-toast-header">
+                    <span class="error-toast-badge">Alert</span>
+                    <span class="error-toast-title" id="errorToastTitle">Error Occurred</span>
+                </div>
+                <div class="error-toast-msg" id="errorToastMsg">Click for full details</div>
+            </div>
+            <div class="error-toast-controls">
+                <button type="button" class="btn-toast-pill" id="btnToastDetails" title="View details">Details</button>
+                <button type="button" class="btn-toast-dismiss" id="btnDismissToast" title="Dismiss / Clear">&times;</button>
+            </div>
+        </div>
+
+        <!-- Error Details Modal -->
+        <div class="modal-overlay hidden" id="errorModal">
+            <div class="modal-content card error-modal-dialog">
+                <div class="modal-header">
+                    <h2><i data-lucide="alert-triangle" style="color:var(--color-danger)"></i> <span id="errorModalTitle">Error Details</span></h2>
+                    <button class="btn btn-icon btn-close" id="btnCloseErrorModal">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="error-modal-intro">The following error occurred while fetching, scraping, or syncing data:</p>
+                    <div class="error-code-container">
+                        <pre id="errorModalMessage" class="error-code-block"></pre>
+                    </div>
+                    <div class="error-modal-actions">
+                        <button type="button" class="btn btn-secondary" id="btnCopyError">
+                            <i data-lucide="copy"></i> <span id="btnCopyErrorText">Copy Error</span>
+                        </button>
+                        <button type="button" class="btn btn-danger" id="btnClearError">
+                            <i data-lucide="trash-2"></i> Clear Error
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Application JS -->
-    <script src="app.js?v=6"></script>
+    <!-- Application JS (Cache-busted v=7) -->
+    <script src="app.js?v=7"></script>
 </body>
 </html>

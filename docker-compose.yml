@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   dashboard:
     build: .
@@ -11,6 +9,10 @@ services:
     environment:
       # Timezone configuration
       - TZ=America/Toronto
+      # Memory tuning for glibc allocator
+      - MALLOC_ARENA_MAX=2
+      # Scraper Download Timeout in seconds (default: 120s; retries bump to 300s)
+      - SCRAPER_DOWNLOAD_TIMEOUT_SECONDS=120
       # Scraper Login Credentials & Parameters
       - ACCOUNT_NAME=Your Full Name
       - ACCOUNT_NUMBER=123456789

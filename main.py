@@ -5,6 +5,8 @@ import shutil
 import threading
 import subprocess
 import sys
+import gc
+import ctypes
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +15,16 @@ from contextlib import contextmanager
 from pydantic import BaseModel
 from typing import Optional
 import parser
+
+def release_memory():
+    """Forces Python garbage collection and instructs glibc to release free memory back to the OS."""
+    gc.collect()
+    try:
+        # Calls glibc malloc_trim(0) on Linux to release arena memory to OS
+        libc = ctypes.CDLL("libc.so.6")
+        libc.malloc_trim(0)
+    except Exception:
+        pass
 
 app = FastAPI(title="Green Button Energy Dashboard & Alectra Scraper")
 
@@ -263,6 +275,13 @@ def scan_and_import_directory():
         error_msg = f"Sync Error: {str(e)}"
         set_setting('last_sync_error', error_msg)
         print(error_msg)
+    finally:
+        try:
+            with get_db() as conn:
+                conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except Exception:
+            pass
+        release_memory()
 
 # Background scheduler thread for folder scanner
 def start_folder_scanner():
@@ -318,6 +337,7 @@ def _run_scraper_isolated(from_dt: datetime, to_dt: datetime) -> None:
         
     finally:
         set_setting('scraper_active', 'false')
+        release_memory()
 
 # Background scheduler thread for daily web scraper runs
 def start_daily_scraper():
@@ -401,6 +421,7 @@ def startup_event():
     set_setting('scraper_active', 'false')
     start_folder_scanner()
     start_daily_scraper()
+    release_memory()
 
 @app.get("/api/status")
 def get_status():
@@ -468,6 +489,13 @@ def get_status():
 def trigger_sync(background_tasks: BackgroundTasks):
     background_tasks.add_task(scan_and_import_directory)
     return {"status": "Sync task scheduled in background"}
+
+@app.post("/api/status/clear-error")
+def clear_status_error():
+    set_setting('last_scraper_error', '')
+    set_setting('last_sync_error', '')
+    set_setting('last_error', '')
+    return {"status": "success", "message": "All error states cleared successfully"}
 
 @app.get("/api/settings")
 def get_settings():
@@ -553,6 +581,7 @@ def upload_xml_file(file: UploadFile = File(...)):
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        release_memory()
 
 @app.get("/api/data")
 def get_data(

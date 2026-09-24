@@ -1454,3 +1454,673 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
     justify-content: flex-end;
     gap: 10px;
 }
+
+/* ==========================================================================
+   OPTION C: ALECTRA BILLING & TARIFF ANALYTICS CARD
+   ========================================================================== */
+.billing-analytics-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--border-radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+    transition: var(--transition);
+}
+
+.billing-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+}
+
+.billing-header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.billing-icon-box {
+    width: 38px;
+    height: 38px;
+    background-color: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-net);
+}
+
+.billing-icon-box i, .billing-icon-box svg {
+    width: 20px;
+    height: 20px;
+}
+
+.billing-header-title h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.billing-header-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: block;
+    margin-top: 2px;
+}
+
+.billing-header-badges {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.badge-oer-applied {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background-color: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-production);
+}
+
+.badge-oer-applied .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--color-production);
+}
+
+.badge-schedule-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* 3-Column Grid */
+.billing-analytics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr 1.15fr;
+    gap: 24px;
+}
+
+@media (max-width: 1024px) {
+    .billing-analytics-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+
+.analytics-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.col-section-header {
+    margin-bottom: 12px;
+}
+
+.col-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+}
+
+/* Column 1: Bill Hero */
+.col-bill-hero {
+    border-right: 1px solid var(--border-card);
+    padding-right: 20px;
+}
+
+@media (max-width: 1024px) {
+    .col-bill-hero {
+        border-right: none;
+        border-bottom: 1px solid var(--border-card);
+        padding-right: 0;
+        padding-bottom: 20px;
+    }
+}
+
+.bill-hero-value {
+    font-size: 38px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+    margin-top: 4px;
+}
+
+.bill-hero-value .currency {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-left: 4px;
+}
+
+.bill-hero-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    margin-bottom: 16px;
+}
+
+.bill-metrics-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.metric-pill {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.metric-pill .metric-label {
+    color: var(--text-secondary);
+}
+
+.metric-pill .metric-val {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.metric-pill.metric-credit .metric-val {
+    color: var(--color-production);
+}
+
+.cost-distribution-box {
+    margin-top: auto;
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.cost-bar-container {
+    height: 8px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    display: flex;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.cost-bar-segment {
+    height: 100%;
+    transition: width 0.4s ease;
+}
+
+.segment-commodity {
+    background-color: var(--color-consumption);
+}
+
+.segment-delivery {
+    background-color: var(--color-net);
+}
+
+.segment-regulatory {
+    background-color: var(--color-production);
+}
+
+.cost-bar-legend {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.cost-bar-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.dot-commodity {
+    background-color: var(--color-consumption);
+}
+
+.dot-delivery {
+    background-color: var(--color-net);
+}
+
+.dot-regulatory {
+    background-color: var(--color-production);
+}
+
+/* Column 2: Itemized Statement */
+.col-statement {
+    border-right: 1px solid var(--border-card);
+    padding-right: 20px;
+}
+
+@media (max-width: 1024px) {
+    .col-statement {
+        border-right: none;
+        border-bottom: 1px solid var(--border-card);
+        padding-right: 0;
+        padding-bottom: 20px;
+    }
+}
+
+.statement-table {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.statement-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 2px 0;
+}
+
+.desc-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.desc-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+}
+
+.statement-val {
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.statement-row.row-subtotal {
+    border-top: 1px solid var(--border-card);
+    padding-top: 8px;
+    margin-top: 2px;
+}
+
+.statement-row.row-subtotal .desc-name,
+.statement-row.row-subtotal .statement-val {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.statement-row.row-rebate .statement-val {
+    color: var(--color-production);
+}
+
+.statement-row.row-final-total {
+    border-top: 1px solid var(--border-card);
+    padding-top: 10px;
+    margin-top: 4px;
+}
+
+.statement-row.row-final-total .desc-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.statement-row.row-final-total .statement-val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-production);
+}
+
+.text-muted {
+    color: var(--text-secondary) !important;
+}
+
+.text-credit {
+    color: var(--color-production) !important;
+}
+
+/* Column 3: Smart Rate Advisor */
+.advisor-recommend-box {
+    background-color: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+
+.recommend-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--color-production);
+    margin-bottom: 2px;
+}
+
+.recommend-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.recommend-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.recommend-savings {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-production);
+    background-color: rgba(16, 185, 129, 0.15);
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.advisor-table-container {
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.advisor-table-header {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+}
+
+.advisor-plans-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.advisor-plan-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 16px;
+    align-items: center;
+    font-size: 12.5px;
+    padding: 4px 0;
+}
+
+.advisor-plan-row.is-best {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.advisor-plan-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-primary);
+}
+
+.advisor-plan-cost-cell {
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.advisor-plan-diff-cell {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.advisor-plan-diff-cell.is-best-diff {
+    color: var(--color-production);
+    font-weight: 600;
+}
+
+.advisor-tip-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: auto;
+}
+
+.advisor-tip-card .tip-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--color-consumption);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.advisor-tip-card .tip-body {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* ==========================================================================
+   SETTINGS MODAL TABS & EXPANDED FORMS
+   ========================================================================== */
+.modal-content {
+    max-width: 680px !important;
+}
+
+.settings-nav-tabs {
+    display: flex;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 5px;
+    margin-bottom: 20px;
+}
+
+.tab-nav-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+
+.tab-nav-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-nav-btn.active {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    color: #38bdf8;
+}
+
+.settings-tab-pane {
+    animation: fadeIn 0.2s ease;
+}
+
+.settings-tab-pane.hidden {
+    display: none;
+}
+
+.form-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.form-grid-3col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .form-grid-2col, .form-grid-3col {
+        grid-template-columns: 1fr;
+    }
+}
+
+.settings-subheading {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 6px;
+}
+
+.settings-subheading i, .settings-subheading svg {
+    width: 16px;
+    height: 16px;
+    color: #38bdf8;
+}
+
+.checkbox-group-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.form-actions-split {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-outline-warning {
+    background: transparent;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition);
+}
+
+.btn-outline-warning:hover {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.6);
+}
+
+/* === Card Date Badge === */
+.card-date-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-card);
+    border-radius: 6px;
+    padding: 4px 9px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.card-date-badge svg {
+    opacity: 0.7;
+}
+
+/* card-header-flex: used to put a header block and a trailing badge on same row */
+.card-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.card-header-flex .card-header {
+    margin-bottom: 0;
+}
+
+/* Active plan read-only badge (in billing card header) */
+.badge-active-plan {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 6px;
+    padding: 4px 10px;
+    white-space: nowrap;
+}
+
+/* Active plan selector in Settings billing tab */
+.active-plan-setting-group {
+    background: rgba(56, 189, 248, 0.06);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+}
+.active-plan-setting-group label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #38bdf8;
+    margin-bottom: 8px;
+}
+.active-plan-setting-select {
+    max-width: 300px;
+}
+

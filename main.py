@@ -13,8 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import contextmanager
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any, List
 import parser
+import ontario_holidays
 
 def release_memory():
     """Forces Python garbage collection and instructs glibc to release free memory back to the OS."""
@@ -127,6 +128,30 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('last_scraper_run', '')")
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('last_scraper_error', '')")
 
+        # Alectra Statement Billing Parameters
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_fixed_delivery_monthly', '35.38')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_volumetric_delivery_kwh', '0.0175')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_line_loss_factor', '1.034100')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_regulatory_kwh', '0.005983')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_oer_percent', '23.5')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_hst_percent', '13.0')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_apply_hst', 'true')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('billing_apply_oer', 'true')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('active_rate_plan', 'tou')")
+
+        # Ontario Energy Board (OEB) Rate Schedule — effective Nov 1, 2024
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tou_on_peak', '0.203')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tou_mid_peak', '0.157')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tou_off_peak', '0.098')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_ulo_ultra_low_overnight', '0.039')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_ulo_off_peak', '0.098')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_ulo_mid_peak', '0.157')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_ulo_on_peak', '0.391')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tiered_tier1', '0.120')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tiered_tier2', '0.142')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tiered_threshold_summer', '600.0')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tiered_threshold_winter', '1000.0')")
+
 # Get settings helpers
 def get_setting(key, default=""):
     try:
@@ -136,12 +161,365 @@ def get_setting(key, default=""):
     except Exception:
         return default
 
+def auto_detect_rate_plan(conn=None) -> str:
+    """
+    Auto-detects the enrolled Alectra rate plan from meter data in the DB:
+      - ULO:    tou=4 (ultra-low overnight) intervals exist in readings
+      - Tiered: consumptionTier > 0 intervals exist in readings
+      - TOU:    default (on/mid/off-peak codes 1/2/3 only)
+    Returns 'ulo', 'tiered', or 'tou'.
+    """
+    try:
+        def _detect(c):
+            # Check for ULO: tou code 4 = ultra-low overnight (ULO customers only)
+            row = c.execute(
+                "SELECT COUNT(*) as cnt FROM readings WHERE tou = 4 AND category = 'consumption'"
+            ).fetchone()
+            if row and row[0] > 0:
+                return 'ulo'
+            # Check for Tiered: consumptionTier > 0 populated by Alectra for tiered customers
+            row = c.execute(
+                "SELECT COUNT(*) as cnt FROM readings WHERE tier > 0 AND category = 'consumption'"
+            ).fetchone()
+            if row and row[0] > 0:
+                return 'tiered'
+            return 'tou'
+
+        if conn is not None:
+            return _detect(conn)
+        with get_db() as c:
+            return _detect(c)
+    except Exception:
+        return 'tou'
+
 def set_setting(key, value):
     try:
         with get_db() as conn:
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
     except Exception as e:
         print(f"Failed to set setting {key}={value}: {e}")
+
+def get_billing_parameters() -> Dict[str, Any]:
+    return {
+        "monthly_fixed_delivery": float(get_setting('billing_fixed_delivery_monthly', '35.38')),
+        "volumetric_delivery_kwh": float(get_setting('billing_volumetric_delivery_kwh', '0.0175')),
+        "line_loss_factor": float(get_setting('billing_line_loss_factor', '1.034100')),
+        "regulatory_kwh": float(get_setting('billing_regulatory_kwh', '0.005983')),
+        "oer_percent": float(get_setting('billing_oer_percent', '23.5')),
+        "hst_percent": float(get_setting('billing_hst_percent', '13.0')),
+        "apply_hst": get_setting('billing_apply_hst', 'true').lower() in ('true', '1'),
+        "apply_oer": get_setting('billing_apply_oer', 'true').lower() in ('true', '1'),
+        # Auto-detected from meter data (tou/tier codes in XML) — no manual setting needed
+        "active_rate_plan": auto_detect_rate_plan()
+    }
+
+def save_billing_parameters(params: Dict[str, Any]):
+    for k, v in params.items():
+        if k == 'monthly_fixed_delivery': set_setting('billing_fixed_delivery_monthly', v)
+        elif k == 'volumetric_delivery_kwh': set_setting('billing_volumetric_delivery_kwh', v)
+        elif k == 'line_loss_factor': set_setting('billing_line_loss_factor', v)
+        elif k == 'regulatory_kwh': set_setting('billing_regulatory_kwh', v)
+        elif k == 'oer_percent': set_setting('billing_oer_percent', v)
+        elif k == 'hst_percent': set_setting('billing_hst_percent', v)
+        elif k == 'apply_hst': set_setting('billing_apply_hst', 'true' if v else 'false')
+        elif k == 'apply_oer': set_setting('billing_apply_oer', 'true' if v else 'false')
+        elif k == 'active_rate_plan': set_setting('active_rate_plan', v)
+
+def reset_billing_parameters() -> Dict[str, Any]:
+    defaults = {
+        "monthly_fixed_delivery": 35.38,
+        "volumetric_delivery_kwh": 0.0175,
+        "line_loss_factor": 1.034100,
+        "regulatory_kwh": 0.005983,
+        "oer_percent": 23.5,
+        "hst_percent": 13.0,
+        "apply_hst": True,
+        "apply_oer": True,
+        "active_rate_plan": "tou"
+    }
+    save_billing_parameters(defaults)
+    return defaults
+
+def get_oeb_rates() -> Dict[str, Any]:
+    return {
+        "tou_on_peak": float(get_setting('rate_tou_on_peak', '0.182')),
+        "tou_mid_peak": float(get_setting('rate_tou_mid_peak', '0.122')),
+        "tou_off_peak": float(get_setting('rate_tou_off_peak', '0.087')),
+        "ulo_ultra_low_overnight": float(get_setting('rate_ulo_ultra_low_overnight', '0.028')),
+        "ulo_off_peak": float(get_setting('rate_ulo_off_peak', '0.087')),
+        "ulo_mid_peak": float(get_setting('rate_ulo_mid_peak', '0.122')),
+        "ulo_on_peak": float(get_setting('rate_ulo_on_peak', '0.286')),
+        "tiered_tier1": float(get_setting('rate_tiered_tier1', '0.103')),
+        "tiered_tier2": float(get_setting('rate_tiered_tier2', '0.125')),
+        "summer_slab_kwh": float(get_setting('rate_tiered_threshold_summer', '600.0')),
+        "winter_slab_kwh": float(get_setting('rate_tiered_threshold_winter', '1000.0'))
+    }
+
+def save_oeb_rates(rates: Dict[str, Any]):
+    for k, v in rates.items():
+        if k == 'tou_on_peak': set_setting('rate_tou_on_peak', v)
+        elif k == 'tou_mid_peak': set_setting('rate_tou_mid_peak', v)
+        elif k == 'tou_off_peak': set_setting('rate_tou_off_peak', v)
+        elif k == 'ulo_ultra_low_overnight': set_setting('rate_ulo_ultra_low_overnight', v)
+        elif k == 'ulo_off_peak': set_setting('rate_ulo_off_peak', v)
+        elif k == 'ulo_mid_peak': set_setting('rate_ulo_mid_peak', v)
+        elif k == 'ulo_on_peak': set_setting('rate_ulo_on_peak', v)
+        elif k == 'tiered_tier1': set_setting('rate_tiered_tier1', v)
+        elif k == 'tiered_tier2': set_setting('rate_tiered_tier2', v)
+        elif k == 'summer_slab_kwh': set_setting('rate_tiered_threshold_summer', v)
+        elif k == 'winter_slab_kwh': set_setting('rate_tiered_threshold_winter', v)
+
+def reset_oeb_rates() -> Dict[str, Any]:
+    # OEB rate schedule effective Nov 1, 2024
+    defaults = {
+        "tou_on_peak": 0.203,
+        "tou_mid_peak": 0.157,
+        "tou_off_peak": 0.098,
+        "ulo_ultra_low_overnight": 0.039,
+        "ulo_off_peak": 0.098,
+        "ulo_mid_peak": 0.157,
+        "ulo_on_peak": 0.391,
+        "tiered_tier1": 0.120,
+        "tiered_tier2": 0.142,
+        "summer_slab_kwh": 600.0,
+        "winter_slab_kwh": 1000.0
+    }
+    save_oeb_rates(defaults)
+    return defaults
+
+def calculate_bill_breakdown(
+    total_kwh: float,
+    commodity_cost: float,
+    days_count: float,
+    params: Dict[str, Any] = None,
+    active_rate_plan: str = None,
+    tou_summary: Dict[str, Any] = None,
+    ulo_summary: Dict[str, Any] = None,
+    rates: Dict[str, Any] = None,
+    sample_ts: int = None
+) -> Dict[str, Any]:
+    if params is None:
+        params = get_billing_parameters()
+    if rates is None:
+        rates = get_oeb_rates()
+    if active_rate_plan is None:
+        active_rate_plan = params.get('active_rate_plan', 'tou')
+
+    effective_days = 30.0 if days_count <= 0.0 else days_count
+
+    # Determine Season
+    if sample_ts:
+        dt = datetime.fromtimestamp(sample_ts, tz=timezone.utc)
+        month = dt.month
+    else:
+        month = datetime.now().month
+    is_summer = 5 <= month <= 10
+    season_name = "Summer" if is_summer else "Winter"
+    monthly_slab = rates['summer_slab_kwh'] if is_summer else rates['winter_slab_kwh']
+    effective_slab = max(1.0, (effective_days / 30.0) * monthly_slab)
+
+    # Dynamic Commodity Cost and Splitup based on active_rate_plan
+    actual_commodity_cost = commodity_cost
+    commodity_split = {}
+
+    if active_rate_plan == 'tiered':
+        t1 = min(total_kwh, effective_slab)
+        t2 = max(0.0, total_kwh - effective_slab)
+        t1_cost = t1 * rates['tiered_tier1']
+        t2_cost = t2 * rates['tiered_tier2']
+        actual_commodity_cost = t1_cost + t2_cost
+        
+        text_desc = f"Tier 1: {t1:.1f} kWh (${t1_cost:.2f}) @ {rates['tiered_tier1']*100:.1f}¢"
+        if t2 > 0:
+            text_desc += f" • Tier 2: {t2:.1f} kWh (${t2_cost:.2f}) @ {rates['tiered_tier2']*100:.1f}¢"
+        else:
+            text_desc += f" (within {effective_slab:.0f} kWh slab)"
+
+        commodity_split = {
+            "plan_id": "tiered",
+            "plan_name": "Tiered Pricing",
+            "tier1_kwh": round(t1, 2),
+            "tier1_cost": round(t1_cost, 2),
+            "tier2_kwh": round(t2, 2),
+            "tier2_cost": round(t2_cost, 2),
+            "effective_slab_kwh": round(effective_slab, 1),
+            "season_name": season_name,
+            "text": text_desc
+        }
+    elif active_rate_plan == 'ulo' and ulo_summary:
+        kwh_ulo_overnight = ulo_summary.get('ultra_low_overnight_kwh', 0.0)
+        kwh_ulo_off_peak = ulo_summary.get('off_peak_kwh', 0.0)
+        kwh_ulo_mid_peak = ulo_summary.get('mid_peak_kwh', 0.0)
+        kwh_ulo_on_peak = ulo_summary.get('on_peak_kwh', 0.0)
+
+        c_ovn = kwh_ulo_overnight * rates['ulo_ultra_low_overnight']
+        c_off = kwh_ulo_off_peak * rates['ulo_off_peak']
+        c_mid = kwh_ulo_mid_peak * rates['ulo_mid_peak']
+        c_on = kwh_ulo_on_peak * rates['ulo_on_peak']
+        actual_commodity_cost = c_ovn + c_off + c_mid + c_on
+
+        commodity_split = {
+            "plan_id": "ulo",
+            "plan_name": "Ultra-Low Overnight (ULO)",
+            "overnight_kwh": round(kwh_ulo_overnight, 2),
+            "overnight_cost": round(c_ovn, 2),
+            "off_peak_kwh": round(kwh_ulo_off_peak, 2),
+            "off_peak_cost": round(c_off, 2),
+            "mid_peak_kwh": round(kwh_ulo_mid_peak, 2),
+            "mid_peak_cost": round(c_mid, 2),
+            "on_peak_kwh": round(kwh_ulo_on_peak, 2),
+            "on_peak_cost": round(c_on, 2),
+            "text": f"O/N: {kwh_ulo_overnight:.1f}k (${c_ovn:.2f}) • Off: {kwh_ulo_off_peak:.1f}k (${c_off:.2f}) • Mid: {kwh_ulo_mid_peak:.1f}k (${c_mid:.2f}) • Peak: {kwh_ulo_on_peak:.1f}k (${c_on:.2f})"
+        }
+    elif tou_summary:
+        on_peak = tou_summary.get('on_peak_kwh', 0.0)
+        mid_peak = tou_summary.get('mid_peak_kwh', 0.0)
+        off_peak = tou_summary.get('off_peak_kwh', 0.0) + tou_summary.get('ulo_kwh', 0.0)
+        c_on = on_peak * rates['tou_on_peak']
+        c_mid = mid_peak * rates['tou_mid_peak']
+        c_off = off_peak * rates['tou_off_peak']
+        actual_commodity_cost = c_on + c_mid + c_off
+
+        commodity_split = {
+            "plan_id": "tou",
+            "plan_name": "Standard Time-of-Use (TOU)",
+            "on_peak_kwh": round(on_peak, 2),
+            "on_peak_cost": round(c_on, 2),
+            "mid_peak_kwh": round(mid_peak, 2),
+            "mid_peak_cost": round(c_mid, 2),
+            "off_peak_kwh": round(off_peak, 2),
+            "off_peak_cost": round(c_off, 2),
+            "text": f"On: {on_peak:.1f}k (${c_on:.2f}) • Mid: {mid_peak:.1f}k (${c_mid:.2f}) • Off: {off_peak:.1f}k (${c_off:.2f})"
+        }
+
+    adjusted_kwh = total_kwh * params['line_loss_factor']
+    fixed_delivery = params['monthly_fixed_delivery'] * (effective_days / 30.0)
+    variable_delivery = adjusted_kwh * params['volumetric_delivery_kwh']
+    total_delivery = fixed_delivery + variable_delivery
+    regulatory = total_kwh * params['regulatory_kwh']
+    total_electricity_charges = actual_commodity_cost + total_delivery + regulatory
+    hst_amount = total_electricity_charges * (params['hst_percent'] / 100.0) if params['apply_hst'] else 0.0
+    oer_rebate = total_electricity_charges * (params['oer_percent'] / 100.0) if params['apply_oer'] else 0.0
+    total_amount_due = total_electricity_charges + hst_amount - oer_rebate
+
+    return {
+        "active_rate_plan": active_rate_plan,
+        "commodity_cost": round(actual_commodity_cost, 2),
+        "commodity_split": commodity_split,
+        "total_kwh": round(total_kwh, 4),
+        "adjusted_kwh": round(adjusted_kwh, 4),
+        "fixed_delivery_cost": round(fixed_delivery, 2),
+        "variable_delivery_cost": round(variable_delivery, 2),
+        "total_delivery_cost": round(total_delivery, 2),
+        "regulatory_cost": round(regulatory, 2),
+        "total_electricity_charges": round(total_electricity_charges, 2),
+        "hst_amount": round(hst_amount, 2),
+        "oer_rebate_amount": round(oer_rebate, 2),
+        "total_amount_due": round(total_amount_due, 2),
+        "days_count": round(effective_days, 1),
+        "apply_hst": params['apply_hst'],
+        "apply_oer": params['apply_oer'],
+        "hst_percent": params['hst_percent'],
+        "oer_percent": params['oer_percent'],
+        "line_loss_factor": params['line_loss_factor'],
+        "volumetric_delivery_kwh": params['volumetric_delivery_kwh'],
+        "monthly_fixed_delivery": params['monthly_fixed_delivery'],
+        "regulatory_kwh": params['regulatory_kwh']
+    }
+
+def calculate_plan_advisor(
+    total_kwh: float,
+    tou_summary: Dict[str, Any],
+    ulo_summary: Dict[str, Any],
+    days_count: float,
+    rates: Dict[str, Any] = None,
+    sample_ts: int = None,
+    active_rate_plan: str = 'tou'
+) -> Optional[Dict[str, Any]]:
+    if total_kwh <= 0.0:
+        return None
+    if rates is None:
+        rates = get_oeb_rates()
+
+    effective_days = max(1.0, days_count if days_count > 0 else 30.0)
+
+    # Determine Season from sample_ts or system clock
+    if sample_ts:
+        dt = datetime.fromtimestamp(sample_ts, tz=timezone.utc)
+        month = dt.month
+    else:
+        month = datetime.now().month
+
+    is_summer = 5 <= month <= 10
+    season_name = "Summer" if is_summer else "Winter"
+    monthly_slab = rates['summer_slab_kwh'] if is_summer else rates['winter_slab_kwh']
+    effective_slab = max(1.0, (effective_days / 30.0) * monthly_slab)
+
+    # 1. Standard TOU
+    on_peak = tou_summary.get('on_peak_kwh', 0.0)
+    mid_peak = tou_summary.get('mid_peak_kwh', 0.0)
+    off_peak = tou_summary.get('off_peak_kwh', 0.0)
+    ulo_base = tou_summary.get('ulo_kwh', 0.0)
+    cost_tou = (on_peak * rates['tou_on_peak']) + (mid_peak * rates['tou_mid_peak']) + ((off_peak + ulo_base) * rates['tou_off_peak'])
+
+    # 2. Ultra-Low Overnight (ULO)
+    kwh_ulo_overnight = ulo_summary.get('ultra_low_overnight_kwh', 0.0)
+    kwh_ulo_off_peak = ulo_summary.get('off_peak_kwh', 0.0)
+    kwh_ulo_mid_peak = ulo_summary.get('mid_peak_kwh', 0.0)
+    kwh_ulo_on_peak = ulo_summary.get('on_peak_kwh', 0.0)
+
+    cost_ulo = (kwh_ulo_overnight * rates['ulo_ultra_low_overnight']) + \
+               (kwh_ulo_off_peak * rates['ulo_off_peak']) + \
+               (kwh_ulo_mid_peak * rates['ulo_mid_peak']) + \
+               (kwh_ulo_on_peak * rates['ulo_on_peak'])
+
+    # 3. Tiered Pricing
+    t1 = min(total_kwh, effective_slab)
+    t2 = max(0.0, total_kwh - effective_slab)
+    cost_tiered = (t1 * rates['tiered_tier1']) + (t2 * rates['tiered_tier2'])
+
+    plan_costs = [
+        {"id": "tou", "name": "Standard TOU", "cost": round(cost_tou, 2), "rate_desc": f"{rates['tou_on_peak']*100:.1f}¢ / {rates['tou_mid_peak']*100:.1f}¢ / {rates['tou_off_peak']*100:.1f}¢"},
+        {"id": "ulo", "name": "Ultra-Low Overnight (ULO)", "cost": round(cost_ulo, 2), "rate_desc": f"{rates['ulo_ultra_low_overnight']*100:.1f}¢ / {rates['ulo_off_peak']*100:.1f}¢ / {rates['ulo_mid_peak']*100:.1f}¢ / {rates['ulo_on_peak']*100:.1f}¢"},
+        {"id": "tiered", "name": "Tiered Pricing", "cost": round(cost_tiered, 2), "rate_desc": f"{rates['tiered_tier1']*100:.1f}¢ (<={effective_slab:.0f} kWh) / {rates['tiered_tier2']*100:.1f}¢"}
+    ]
+
+    active_cost = next((p["cost"] for p in plan_costs if p["id"] == active_rate_plan), cost_tou)
+    best_plan = min(plan_costs, key=lambda p: p["cost"])
+    savings_vs_active = max(0.0, round(active_cost - best_plan["cost"], 2))
+    is_active_best = (active_rate_plan == best_plan["id"])
+
+    # Build context-aware advice comparing to active plan
+    active_plan_obj = next((p for p in plan_costs if p["id"] == active_rate_plan), plan_costs[0])
+    if is_active_best:
+        if best_plan["id"] == "tiered":
+            insight_text = f"You are currently on Tiered Pricing, which is already your most cost-effective option! With {effective_slab:.0f} kWh {season_name} slab for {effective_days:.0f} days, your habits maximize savings without peak penalties."
+        elif best_plan["id"] == "ulo":
+            overnight_pct = (kwh_ulo_overnight / total_kwh * 100.0) if total_kwh > 0 else 0.0
+            insight_text = f"You are currently on Ultra-Low Overnight, which is already your most cost-effective option ({overnight_pct:.0f}% overnight consumption)."
+        else:
+            insight_text = "You are currently on Standard Time-of-Use, which is your most optimal plan. Continue shifting heavy appliance loads away from On-Peak windows."
+    else:
+        insight_text = f"You are on {active_plan_obj['name']}. Switching to {best_plan['name']} would save approximately ${savings_vs_active:.2f} CAD for this {effective_days:.0f}-day evaluated period."
+
+    return {
+        "active_rate_plan": active_rate_plan,
+        "is_active_best": is_active_best,
+        "recommended_plan": best_plan["name"],
+        "recommended_id": best_plan["id"],
+        "savings_vs_active": savings_vs_active,
+        "season_name": season_name,
+        "effective_slab_kwh": round(effective_slab, 0),
+        "days_count": round(effective_days, 1),
+        "plan_costs": plan_costs,
+        "insight_text": insight_text,
+        "ulo_breakdown": {
+            "overnight_kwh": round(kwh_ulo_overnight, 4),
+            "off_peak_kwh": round(kwh_ulo_off_peak, 4),
+            "mid_peak_kwh": round(kwh_ulo_mid_peak, 4),
+            "on_peak_kwh": round(kwh_ulo_on_peak, 4)
+        }
+    }
 
 # Clean up archive older than retention days
 def cleanup_archive_folder(archive_folder, retention_days):
@@ -525,6 +903,62 @@ def update_settings(
     print(f"[DEBUG] settings committed. new time_shift_hours={get_setting('time_shift_hours')}")
     return {"status": "Settings updated successfully"}
 
+# Billing Parameters & OEB Rates Models and Endpoints
+class BillingParametersModel(BaseModel):
+    monthly_fixed_delivery: Optional[float] = None
+    volumetric_delivery_kwh: Optional[float] = None
+    line_loss_factor: Optional[float] = None
+    regulatory_kwh: Optional[float] = None
+    oer_percent: Optional[float] = None
+    hst_percent: Optional[float] = None
+    apply_hst: Optional[bool] = None
+    apply_oer: Optional[bool] = None
+    active_rate_plan: Optional[str] = None
+
+class OebRatesModel(BaseModel):
+    tou_on_peak: Optional[float] = None
+    tou_mid_peak: Optional[float] = None
+    tou_off_peak: Optional[float] = None
+    ulo_ultra_low_overnight: Optional[float] = None
+    ulo_off_peak: Optional[float] = None
+    ulo_mid_peak: Optional[float] = None
+    ulo_on_peak: Optional[float] = None
+    tiered_tier1: Optional[float] = None
+    tiered_tier2: Optional[float] = None
+    summer_slab_kwh: Optional[float] = None
+    winter_slab_kwh: Optional[float] = None
+
+@app.get("/api/billing/parameters")
+def api_get_billing_parameters():
+    return get_billing_parameters()
+
+@app.post("/api/billing/parameters")
+def api_update_billing_parameters(params: BillingParametersModel):
+    data = {k: v for k, v in params.model_dump().items() if v is not None}
+    save_billing_parameters(data)
+    return {"status": "success", "message": "Alectra billing parameters updated", "parameters": get_billing_parameters()}
+
+@app.post("/api/billing/parameters/reset")
+def api_reset_billing_parameters():
+    defaults = reset_billing_parameters()
+    return {"status": "success", "message": "Alectra billing parameters reset to defaults", "parameters": defaults}
+
+@app.get("/api/billing/rates")
+def api_get_billing_rates():
+    return get_oeb_rates()
+
+@app.post("/api/billing/rates")
+def api_update_billing_rates(rates: OebRatesModel):
+    data = {k: v for k, v in rates.model_dump().items() if v is not None}
+    save_oeb_rates(data)
+    return {"status": "success", "message": "OEB rate schedule updated", "rates": get_oeb_rates()}
+
+@app.post("/api/billing/rates/reset")
+def api_reset_billing_rates():
+    defaults = reset_oeb_rates()
+    return {"status": "success", "message": "OEB rate schedule reset to defaults", "rates": defaults}
+
+
 @app.post("/api/reimport")
 def trigger_reimport(background_tasks: BackgroundTasks):
     def reimport_task():
@@ -594,17 +1028,41 @@ def get_data(
         time_shift = float(get_setting('time_shift_hours', '0'))
         drift_sec = int(time_shift * 3600)
         
-        # Handle 'latest_day': automatically find the most recent available date in database
-        if date_range == "latest_day":
-            max_row = conn.execute("SELECT MAX(timestamp) FROM readings").fetchone()
+        # Resolve all preset date ranges anchored to the latest available data in DB
+        # This ensures "Last 30 Days" = latest 30 days of data, not 30 days from today
+        if date_range in ("latest_day", "last_7_days", "last_30_days", "month_to_date", "year_to_date", "all_time"):
+            max_row = conn.execute("SELECT MAX(timestamp), MIN(timestamp) FROM readings").fetchone()
             if max_row and max_row[0]:
                 max_ts = max_row[0]
-                dt = datetime.fromtimestamp(max_ts + drift_sec, tz=timezone.utc)
-                day_start = int(datetime(dt.year, dt.month, dt.day, tzinfo=timezone.utc).timestamp())
-                day_end = day_start + 86399
-                start = day_start
-                end = day_end
-        
+                min_ts = max_row[1]
+                dt_max = datetime.fromtimestamp(max_ts + drift_sec, tz=timezone.utc)
+
+                if date_range == "latest_day":
+                    day_start = int(datetime(dt_max.year, dt_max.month, dt_max.day, tzinfo=timezone.utc).timestamp())
+                    start = day_start
+                    end = day_start + 86399
+
+                elif date_range == "last_7_days":
+                    end = int(datetime(dt_max.year, dt_max.month, dt_max.day, 23, 59, 59, tzinfo=timezone.utc).timestamp())
+                    start = end - (7 * 86400)
+
+                elif date_range == "last_30_days":
+                    end = int(datetime(dt_max.year, dt_max.month, dt_max.day, 23, 59, 59, tzinfo=timezone.utc).timestamp())
+                    start = end - (30 * 86400)
+
+                elif date_range == "month_to_date":
+                    # Start of the month containing the latest data point
+                    start = int(datetime(dt_max.year, dt_max.month, 1, tzinfo=timezone.utc).timestamp())
+                    end = int(datetime(dt_max.year, dt_max.month, dt_max.day, 23, 59, 59, tzinfo=timezone.utc).timestamp())
+
+                elif date_range == "year_to_date":
+                    start = int(datetime(dt_max.year, 1, 1, tzinfo=timezone.utc).timestamp())
+                    end = int(datetime(dt_max.year, dt_max.month, dt_max.day, 23, 59, 59, tzinfo=timezone.utc).timestamp())
+
+                elif date_range == "all_time":
+                    start = min_ts
+                    end = max_ts
+
         # Resolution safety guards to bound memory and CPU usage
         if resolution == "15min":
             # 15-minute resolution is constrained to at most 2 days (up to 192 intervals)
@@ -711,10 +1169,65 @@ def get_data(
             else:
                 tier_summary["other_kwh"] += val
                 tier_summary["other_cost"] += cost
+
+        # High-precision calculation of ULO 4-slot breakdown across all raw intervals
+        ulo_query = f"""
+            SELECT timestamp, value 
+            FROM readings 
+            {filter_str_consumption}
+            ORDER BY timestamp ASC
+        """
+        try:
+            ulo_rows = conn.execute(ulo_query, params).fetchall()
+        except Exception as e:
+            ulo_rows = []
+            print(f"Error fetching ULO summary: {e}")
+
+        ulo_overnight_kwh = 0.0
+        ulo_off_peak_kwh = 0.0
+        ulo_mid_peak_kwh = 0.0
+        ulo_on_peak_kwh = 0.0
+        sample_ts = None
+
+        for ur in ulo_rows:
+            ts_sec = ur['timestamp'] + drift_sec
+            if sample_ts is None:
+                sample_ts = ts_sec
+            v = ur['value'] or 0.0
+            dt = datetime.fromtimestamp(ts_sec, tz=timezone.utc)
+            slot = ontario_holidays.classify_ulo_slot(dt)
+            if slot == 'overnight':
+                ulo_overnight_kwh += v
+            elif slot == 'off_peak':
+                ulo_off_peak_kwh += v
+            elif slot == 'on_peak':
+                ulo_on_peak_kwh += v
+            else:
+                ulo_mid_peak_kwh += v
+
+        ulo_summary = {
+            "ultra_low_overnight_kwh": round(ulo_overnight_kwh, 4),
+            "off_peak_kwh": round(ulo_off_peak_kwh, 4),
+            "mid_peak_kwh": round(ulo_mid_peak_kwh, 4),
+            "on_peak_kwh": round(ulo_on_peak_kwh, 4)
+        }
             
+        # Capture actual date range of the queried data for frontend display
+        actual_range_row = conn.execute(
+            f"SELECT MIN(timestamp), MAX(timestamp) FROM readings {filter_str}",
+            params
+        ).fetchone()
+        date_from_ts = None
+        date_to_ts = None
+        if actual_range_row and actual_range_row[0]:
+            date_from_ts = (actual_range_row[0] + drift_sec) * 1000  # ms for JS
+            date_to_ts = (actual_range_row[1] + drift_sec) * 1000
+
         # Initialize structured result
         result = {
             "resolution": resolution,
+            "date_from_ts": date_from_ts,
+            "date_to_ts": date_to_ts,
             "consumption": [],
             "consumption_cost": [],
             "production": [],
@@ -742,7 +1255,10 @@ def get_data(
                 "other_cost": []
             },
             "tou_summary": tou_summary,
-            "tier_summary": tier_summary
+            "tier_summary": tier_summary,
+            "ulo_summary": ulo_summary,
+            "bill_breakdown": {},
+            "plan_advisor": None
         }
 
         def make_bucket():
@@ -865,6 +1381,31 @@ def get_data(
             result["tier_breakdown"]["tier3_cost"].append([ms, round(c['tier_cost'].get(3, 0.0), 4)])
             result["tier_breakdown"]["other"].append([ms, round(c['tier'].get(0, 0.0), 4)])
             result["tier_breakdown"]["other_cost"].append([ms, round(c['tier_cost'].get(0, 0.0), 4)])
+
+        # Calculate days count for effective billing calculation
+        total_import = sum(p[1] for p in result["consumption"])
+        total_import_cost = sum(p[1] for p in result["consumption_cost"])
+
+        days_count = 30.0
+        if start is not None and end is not None and end > start:
+            days_count = max(1.0, (end - start) / 86400.0)
+        elif result["consumption"]:
+            min_ts = result["consumption"][0][0] / 1000.0
+            max_ts = result["consumption"][-1][0] / 1000.0
+            if max_ts > min_ts:
+                days_count = max(1.0, (max_ts - min_ts) / 86400.0)
+            else:
+                days_count = 1.0
+
+        billing_params = get_billing_parameters()
+        oeb_rates = get_oeb_rates()
+        active_plan = billing_params.get('active_rate_plan', 'tou')
+        result["bill_breakdown"] = calculate_bill_breakdown(
+            total_import, total_import_cost, days_count, billing_params, active_plan, tou_summary, ulo_summary, oeb_rates, sample_ts
+        )
+        result["plan_advisor"] = calculate_plan_advisor(
+            total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan
+        )
 
         return result
 

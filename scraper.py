@@ -30,17 +30,28 @@ def _scrape_single_attempt(
 ) -> str:
     """Executes a single login, navigation, and download attempt with Playwright."""
     with sync_playwright() as p:
-        # Launch Chromium with optimized flags to be lighter on resources inside container
+        # Launch Chromium with flags required for stable Docker container operation.
+        # Key flags that prevent "page crashed" errors:
+        #   --disable-dev-shm-usage  : use /tmp instead of /dev/shm (avoids 64MB shm limit)
+        #   --no-sandbox             : required when running as root in Docker
+        #   --single-process         : prevents multi-process renderer crashes in low-memory envs
+        #   --no-zygote              : avoids zygote subprocess issues in Docker
         browser = p.chromium.launch(
             headless=True,
             args=[
                 "--disable-dev-shm-usage",
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
+                "--single-process",
+                "--no-zygote",
                 "--disable-gpu",
                 "--disable-software-rasterizer",
                 "--disable-extensions",
-                "--no-first-run"
+                "--disable-background-networking",
+                "--disable-default-apps",
+                "--disable-sync",
+                "--no-first-run",
+                "--mute-audio",
             ]
         )
         context = browser.new_context(accept_downloads=True)
@@ -205,11 +216,14 @@ def scrape_and_save(from_date: datetime, to_date: datetime, data_dir: str = "/ap
                 ) from e
         except Exception as e:
             last_exception = e
+            err_str = str(e).lower()
             print(f"[Scraper Attempt {attempt}/{max_attempts}] Workflow failed: {e}")
             traceback.print_exc()
-            if attempt < max_attempts and "timeout" in str(e).lower():
-                retry_wait = 5
-                print(f"Retrying in {retry_wait}s (Attempt {attempt + 1} of {max_attempts})...")
+            # Retry on recoverable errors: timeouts, crashes, navigation failures
+            recoverable = any(kw in err_str for kw in ["timeout", "crashed", "navigation failed", "net::", "connection"])
+            if attempt < max_attempts and recoverable:
+                retry_wait = 10
+                print(f"Recoverable error detected. Retrying in {retry_wait}s (Attempt {attempt + 1} of {max_attempts})...")
                 time.sleep(retry_wait)
             else:
                 raise e

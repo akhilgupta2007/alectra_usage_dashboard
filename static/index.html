@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
     <div class="dashboard-container">
@@ -182,9 +182,12 @@
 
             <!-- Rate & Tier Breakdown Card -->
             <section class="card tou-card hidden" id="touCard">
-                <div class="card-header">
-                    <h2>Rate & Tier Breakdown</h2>
-                    <span class="chart-subtitle">Distribution of grid energy consumption and estimated cost across Time-of-Use rates and billing tiers</span>
+                <div class="card-header-flex">
+                    <div class="card-header">
+                        <h2>Rate &amp; Tier Breakdown</h2>
+                        <span class="chart-subtitle">Distribution of grid energy consumption and estimated cost across Time-of-Use rates and billing tiers</span>
+                    </div>
+                    <span class="card-date-badge hidden" id="touCardDateBadge"><i data-lucide="calendar" style="width:13px;height:13px;"></i> <span id="touCardDateText"></span></span>
                 </div>
                 
                 <div class="breakdown-grid">
@@ -302,6 +305,151 @@
                 </div>
             </section>
 
+            <!-- Alectra Billing & Tariff Analytics (3-Column Card) -->
+            <section class="card billing-analytics-card" id="billingAnalyticsCard">
+                <div class="billing-card-header">
+                    <div class="billing-header-title">
+                        <div class="billing-icon-box">
+                            <i data-lucide="receipt"></i>
+                        </div>
+                        <div>
+                            <h2>Alectra Billing &amp; Tariff Analytics</h2>
+                            <span class="billing-header-sub" id="billingDateSubtitle">Billing Period Usage &amp; Tariff Optimization</span>
+                        </div>
+                    </div>
+                    <div class="billing-header-badges">
+                        <span class="badge-active-plan" id="billActivePlanBadge"><i data-lucide="zap" style="width:12px;height:12px;"></i> <span id="billActivePlanText">Time-of-Use (TOU)</span></span>
+                        <span class="badge-oer-applied" id="billOerBadge"><span class="badge-dot"></span> OER 23.5% Applied</span>
+                        <span class="badge-schedule-pill" id="advisorScheduleSubtitle">Summer Schedule</span>
+                    </div>
+                </div>
+
+                <div class="billing-analytics-grid">
+                    <!-- Column 1: Estimated Bill Summary -->
+                    <div class="analytics-col col-bill-hero">
+                        <div class="col-section-header">
+                            <span class="col-section-title">Estimated Bill</span>
+                        </div>
+                        <div class="bill-hero-value" id="billTotalDue">$0.00 <span class="currency">CAD</span></div>
+                        <div class="bill-hero-meta" id="billHeroSub">Estimated Total Due &bull; 0 Days Evaluated</div>
+
+                        <div class="bill-metrics-row">
+                            <div class="metric-pill">
+                                <span class="metric-label">Pre-Rebate:</span>
+                                <span class="metric-val" id="billPreRebateVal">$0.00</span>
+                            </div>
+                            <div class="metric-pill metric-credit">
+                                <span class="metric-label">OER Credit:</span>
+                                <span class="metric-val" id="billOerCreditVal">-$0.00</span>
+                            </div>
+                        </div>
+
+                        <div class="cost-distribution-box">
+                            <div class="cost-bar-container">
+                                <div class="cost-bar-segment segment-commodity" id="barCommodity" style="width: 45%" title="Commodity"></div>
+                                <div class="cost-bar-segment segment-delivery" id="barDelivery" style="width: 50%" title="Delivery"></div>
+                                <div class="cost-bar-segment segment-regulatory" id="barRegulatory" style="width: 5%" title="Regulatory"></div>
+                            </div>
+                            <div class="cost-bar-legend">
+                                <span><span class="legend-dot dot-commodity"></span> Commodity</span>
+                                <span><span class="legend-dot dot-delivery"></span> Delivery</span>
+                                <span><span class="legend-dot dot-regulatory"></span> Regulatory</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Itemized Statement -->
+                    <div class="analytics-col col-statement">
+                        <div class="col-section-header">
+                            <span class="col-section-title">Itemized Statement</span>
+                        </div>
+                        <div class="statement-table">
+                            <div class="statement-row">
+                                <div class="statement-desc">
+                                    <div class="desc-name">Commodity Charges</div>
+                                    <div class="desc-sub" id="billCommoditySub">Billed usage: 0.00 kWh</div>
+                                </div>
+                                <div class="statement-val" id="billCommodityAmt">$0.00</div>
+                            </div>
+                            <div class="statement-row">
+                                <div class="statement-desc">
+                                    <div class="desc-name">Delivery Charges</div>
+                                    <div class="desc-sub" id="billDeliverySub">Fixed ($35.38/30d) + Var (@ 1.0341 line loss)</div>
+                                </div>
+                                <div class="statement-val" id="billDeliveryAmt">$0.00</div>
+                            </div>
+                            <div class="statement-row">
+                                <div class="statement-desc">
+                                    <div class="desc-name">Regulatory Charges</div>
+                                    <div class="desc-sub" id="billRegulatorySub">IESO &amp; RRRP ($0.005983/kWh)</div>
+                                </div>
+                                <div class="statement-val" id="billRegulatoryAmt">$0.00</div>
+                            </div>
+                            <div class="statement-row row-subtotal">
+                                <div class="statement-desc">
+                                    <div class="desc-name">Total Subtotal</div>
+                                </div>
+                                <div class="statement-val" id="billPreTaxSubtotal">$0.00</div>
+                            </div>
+                            <div class="statement-row">
+                                <div class="statement-desc">
+                                    <div class="desc-name">HST (13.0%)</div>
+                                </div>
+                                <div class="statement-val text-muted" id="billHstAmt">+$0.00</div>
+                            </div>
+                            <div class="statement-row row-rebate">
+                                <div class="statement-desc">
+                                    <div class="desc-name">Ontario Electricity Rebate (23.5%)</div>
+                                </div>
+                                <div class="statement-val text-credit" id="billOerAmt">-$0.00</div>
+                            </div>
+                            <div class="statement-row row-final-total">
+                                <div class="statement-desc">
+                                    <div class="desc-name">Total Amount Due</div>
+                                </div>
+                                <div class="statement-val" id="billFinalTotalAmt">$0.00 CAD</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Smart Rate Advisor -->
+                    <div class="analytics-col col-advisor">
+                        <div class="col-section-header">
+                            <span class="col-section-title">Smart Rate Advisor</span>
+                        </div>
+                        
+                        <!-- Recommended Banner -->
+                        <div class="advisor-recommend-box">
+                            <div class="recommend-tag">Recommended</div>
+                            <div class="recommend-flex">
+                                <h3 class="recommend-title" id="advisorBestPlanName">Tiered Pricing</h3>
+                                <span class="recommend-savings" id="advisorSavingsAmount">Est. Savings: $0.00/mo</span>
+                            </div>
+                        </div>
+
+                        <!-- 3-Plan Comparison List -->
+                        <div class="advisor-table-container">
+                            <div class="advisor-table-header">
+                                <span>Plan</span>
+                                <span class="text-right">Period Cost</span>
+                                <span class="text-right">Diff</span>
+                            </div>
+                            <div class="advisor-plans-rows" id="advisorPlansList">
+                                <!-- Dynamic rows rendered by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Contextual Advice Box -->
+                        <div class="advisor-tip-card">
+                            <i data-lucide="lightbulb" class="tip-icon"></i>
+                            <div class="tip-body" id="advisorInsightText">
+                                Analyzing your electricity usage pattern...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Data & File Management Grid -->
             <section class="data-management-grid">
                 <!-- File Upload Dropzone -->
@@ -358,81 +506,231 @@
                 </div>
                 
                 <div class="modal-body">
-                    <form id="settingsForm">
-                        <div class="form-group">
+                    <!-- Tab Navigation -->
+                    <div class="settings-nav-tabs">
+                        <button type="button" class="tab-nav-btn active" data-target="tabGeneral">General &amp; Scraper</button>
+                        <button type="button" class="tab-nav-btn" data-target="tabBilling">Alectra Billing Parameters</button>
+                        <button type="button" class="tab-nav-btn" data-target="tabRates">OEB Rate Schedule</button>
+                    </div>
 
-                            <label for="scanIntervalMinutes">Folder Scan Interval (Minutes)</label>
-                            <div class="time-shift-input-container">
-                                <input type="number" id="scanIntervalMinutes" class="form-control" min="1" step="1" value="60">
-                                <span class="form-help-inline">minutes</span>
-                            </div>
-                            <span class="form-help">Frequency at which the shared directory is scanned for new files.</span>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="archiveRetentionDays">Archive Retention (Days)</label>
-                            <div class="time-shift-input-container">
-                                <input type="number" id="archiveRetentionDays" class="form-control" min="1" step="1" value="60">
-                                <span class="form-help-inline">days</span>
-                            </div>
-                            <span class="form-help">Processed XML files are moved to an 'archive' subfolder. Files older than this are cleaned.</span>
-                        </div>
-                        
-
-                        <div class="form-group">
-                            <label for="timeShiftHours">Time Drift Offset (Hours)</label>
-                            <div class="time-shift-input-container">
-                                <input type="number" id="timeShiftHours" class="form-control" step="0.5" value="0">
-                                <span class="form-help-inline">hours</span>
-                            </div>
-                            <span class="form-help">Default is 0 (automatic XML timezone &amp; Daylight Saving Time detection). Only adjust if your meter has manual clock drift.</span>
-                        </div>
-                        
-                        <!-- Alectra Scraper Settings -->
-                        <div class="settings-section">
-                            <h3>Alectra Scraper Control</h3>
-                            
+                    <!-- Tab 1: General & Scraper -->
+                    <div class="settings-tab-pane active" id="tabGeneral">
+                        <form id="settingsForm">
                             <div class="form-group">
-                                <label for="scraperRunTime">Daily Scrape Time</label>
-                                <input type="time" id="scraperRunTime" class="form-control" value="06:00">
-                                <span class="form-help">The time of day when the scraper will automatically run to fetch utility data.</span>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Credentials Configuration Status</label>
-                                <div id="scraperConfigStatus" class="config-status">Checking credentials...</div>
-                            </div>
-                            
-                            <div class="form-group border-top pt-3">
-                                <label>Manual One-Time Scrape</label>
-                                <div class="date-inputs mt-2">
-                                    <div>
-                                        <span class="form-label-small">From Date</span>
-                                        <input type="date" id="scrapeFromDate" class="form-control">
-                                    </div>
-                                    <div>
-                                        <span class="form-label-small">To Date</span>
-                                        <input type="date" id="scrapeToDate" class="form-control">
-                                    </div>
+                                <label for="scanIntervalMinutes">Folder Scan Interval (Minutes)</label>
+                                <div class="time-shift-input-container">
+                                    <input type="number" id="scanIntervalMinutes" class="form-control" min="1" step="1" value="60">
+                                    <span class="form-help-inline">minutes</span>
                                 </div>
-                                <button type="button" class="btn btn-secondary mt-2" id="btnTriggerManualScrape">
-                                    <i data-lucide="play"></i> Trigger Manual Scrape
-                                </button>
-                                <span class="form-help">Downloads utility data for the specified date range and processes it. Playwright operates in headless background mode; this might take a minute.</span>
+                                <span class="form-help">Frequency at which the shared directory is scanned for new files.</span>
                             </div>
-                        </div>
+                            
+                            <div class="form-group">
+                                <label for="archiveRetentionDays">Archive Retention (Days)</label>
+                                <div class="time-shift-input-container">
+                                    <input type="number" id="archiveRetentionDays" class="form-control" min="1" step="1" value="60">
+                                    <span class="form-help-inline">days</span>
+                                </div>
+                                <span class="form-help">Processed XML files are moved to an 'archive' subfolder. Files older than this are cleaned.</span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="timeShiftHours">Time Drift Offset (Hours)</label>
+                                <div class="time-shift-input-container">
+                                    <input type="number" id="timeShiftHours" class="form-control" step="0.5" value="0">
+                                    <span class="form-help-inline">hours</span>
+                                </div>
+                                <span class="form-help">Default is 0 (automatic XML timezone &amp; Daylight Saving Time detection). Only adjust if your meter has manual clock drift.</span>
+                            </div>
+                            
+                            <!-- Alectra Scraper Settings -->
+                            <div class="settings-section">
+                                <h3>Alectra Scraper Control</h3>
+                                
+                                <div class="form-group">
+                                    <label for="scraperRunTime">Daily Scrape Time</label>
+                                    <input type="time" id="scraperRunTime" class="form-control" value="06:00">
+                                    <span class="form-help">The time of day when the scraper will automatically run to fetch utility data.</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Credentials Configuration Status</label>
+                                    <div id="scraperConfigStatus" class="config-status">Checking credentials...</div>
+                                </div>
+                                
+                                <div class="form-group border-top pt-3">
+                                    <label>Manual One-Time Scrape</label>
+                                    <div class="date-inputs mt-2">
+                                        <div>
+                                            <span class="form-label-small">From Date</span>
+                                            <input type="date" id="scrapeFromDate" class="form-control">
+                                        </div>
+                                        <div>
+                                            <span class="form-label-small">To Date</span>
+                                            <input type="date" id="scrapeToDate" class="form-control">
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary mt-2" id="btnTriggerManualScrape">
+                                        <i data-lucide="play"></i> Trigger Manual Scrape
+                                    </button>
+                                    <span class="form-help">Downloads utility data for the specified date range and processes it. Playwright operates in headless background mode; this might take a minute.</span>
+                                </div>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary" id="btnSaveSettings">Save General Settings</button>
+                            </div>
+                        </form>
                         
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary" id="btnSaveSettings">Save Settings</button>
+                        <div class="danger-zone">
+                            <h3>Danger Zone</h3>
+                            <p>If you modified your Time Drift Offset, you must wipe the database and re-process all your files in the shared folder to align historical charts.</p>
+                            <button class="btn btn-danger" id="btnReimport">
+                                <i data-lucide="trash-2"></i> Wipe & Re-import All Files
+                            </button>
                         </div>
-                    </form>
-                    
-                    <div class="danger-zone">
-                        <h3>Danger Zone</h3>
-                        <p>If you modified your Time Drift Offset, you must wipe the database and re-process all your files in the shared folder to align historical charts.</p>
-                        <button class="btn btn-danger" id="btnReimport">
-                            <i data-lucide="trash-2"></i> Wipe & Re-import All Files
-                        </button>
+                    </div>
+
+                    <!-- Tab 2: Alectra Statement Billing Parameters -->
+                    <div class="settings-tab-pane hidden" id="tabBilling">
+                        <form id="billingForm">
+                            <div class="form-grid-2col">
+                                <div class="form-group">
+                                    <label for="billingFixedDelivery">Monthly Fixed Delivery ($ CAD)</label>
+                                    <input type="number" id="billingFixedDelivery" class="form-control" step="0.01" value="35.38" required>
+                                    <span class="form-help">Alectra monthly distribution charge ($/month).</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="billingVolumetricDelivery">Volumetric Delivery ($/kWh)</label>
+                                    <input type="number" id="billingVolumetricDelivery" class="form-control" step="0.000001" value="0.0175" required>
+                                    <span class="form-help">Transmission &amp; variable delivery rate.</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="billingLineLoss">Distribution Line Loss Factor</label>
+                                    <input type="number" id="billingLineLoss" class="form-control" step="0.000001" value="1.034100" required>
+                                    <span class="form-help">Alectra standard loss multiplier (e.g. 1.034100).</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="billingRegulatory">Regulatory Charges ($/kWh)</label>
+                                    <input type="number" id="billingRegulatory" class="form-control" step="0.000001" value="0.005983" required>
+                                    <span class="form-help">IESO wholesale operations &amp; RRRP charge.</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="billingOerPercent">Ontario Electricity Rebate (OER %)</label>
+                                    <input type="number" id="billingOerPercent" class="form-control" step="0.1" value="23.5" required>
+                                    <span class="form-help">Automatic provincial bill credit percentage.</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="billingHstPercent">Harmonized Sales Tax (HST %)</label>
+                                    <input type="number" id="billingHstPercent" class="form-control" step="0.1" value="13.0" required>
+                                    <span class="form-help">Ontario sales tax percentage.</span>
+                                </div>
+                            </div>
+
+                            <div class="checkbox-group-vertical mt-2">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="billingApplyHst" checked> Apply Harmonized Sales Tax (HST 13%)
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="billingApplyOer" checked> Apply Ontario Electricity Rebate (OER 23.5%)
+                                </label>
+                            </div>
+
+                            <div class="form-actions-split mt-3">
+                                <button type="button" class="btn btn-outline-warning" id="btnResetBillingParams">
+                                    <i data-lucide="rotate-ccw"></i> Reset to Official Defaults
+                                </button>
+                                <button type="submit" class="btn btn-primary" id="btnSaveBillingParams">
+                                    <i data-lucide="save"></i> Save Billing Parameters
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Tab 3: OEB Rate Schedule -->
+                    <div class="settings-tab-pane hidden" id="tabRates">
+                        <form id="ratesForm">
+                            <h4 class="settings-subheading"><i data-lucide="clock"></i> Standard Time-of-Use (TOU) Rates</h4>
+                            <div class="form-grid-3col">
+                                <div class="form-group">
+                                    <label for="rateTouOnPeak">TOU On-Peak</label>
+                                    <input type="number" id="rateTouOnPeak" class="form-control" step="0.1" value="20.3" required>
+                                    <span class="form-help">¢/kWh · Weekdays 7–11 AM &amp; 5–7 PM</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateTouMidPeak">TOU Mid-Peak</label>
+                                    <input type="number" id="rateTouMidPeak" class="form-control" step="0.1" value="15.7" required>
+                                    <span class="form-help">¢/kWh · Weekdays 11 AM–5 PM &amp; 7–11 PM</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateTouOffPeak">TOU Off-Peak</label>
+                                    <input type="number" id="rateTouOffPeak" class="form-control" step="0.1" value="9.8" required>
+                                    <span class="form-help">¢/kWh · Nights, weekends &amp; holidays</span>
+                                </div>
+                            </div>
+
+                            <h4 class="settings-subheading mt-3"><i data-lucide="moon"></i> Ultra-Low Overnight (ULO) Rates</h4>
+                            <div class="form-grid-2col">
+                                <div class="form-group">
+                                    <label for="rateUloOvernight">ULO Ultra-Low Overnight (11 PM – 7 AM)</label>
+                                    <input type="number" id="rateUloOvernight" class="form-control" step="0.1" value="3.9" required>
+                                    <span class="form-help">¢/kWh · Every day overnight</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateUloOffPeak">ULO Off-Peak (7 AM – 11 PM weekends)</label>
+                                    <input type="number" id="rateUloOffPeak" class="form-control" step="0.1" value="9.8" required>
+                                    <span class="form-help">¢/kWh · Weekends &amp; statutory holidays</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateUloMidPeak">ULO Mid-Peak (weekdays)</label>
+                                    <input type="number" id="rateUloMidPeak" class="form-control" step="0.1" value="15.7" required>
+                                    <span class="form-help">¢/kWh · 7 AM–4 PM &amp; 9–11 PM weekdays</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateUloOnPeak">ULO On-Peak (4 PM – 9 PM weekdays)</label>
+                                    <input type="number" id="rateUloOnPeak" class="form-control" step="0.1" value="39.1" required>
+                                    <span class="form-help">¢/kWh · Weekday evening peak</span>
+                                </div>
+                            </div>
+
+                            <h4 class="settings-subheading mt-3"><i data-lucide="bar-chart"></i> Tiered Pricing Rates &amp; Seasonal Thresholds</h4>
+                            <div class="form-grid-2col">
+                                <div class="form-group">
+                                    <label for="rateTieredTier1">Tier 1 Rate</label>
+                                    <input type="number" id="rateTieredTier1" class="form-control" step="0.1" value="12.0" required>
+                                    <span class="form-help">¢/kWh · Up to seasonal threshold</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateTieredTier2">Tier 2 Rate</label>
+                                    <input type="number" id="rateTieredTier2" class="form-control" step="0.1" value="14.2" required>
+                                    <span class="form-help">¢/kWh · Above seasonal threshold</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateSummerThreshold">Summer Slab (kWh / month)</label>
+                                    <input type="number" id="rateSummerThreshold" class="form-control" step="10" value="600" required>
+                                    <span class="form-help">May 1 to Oct 31 (600 kWh)</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rateWinterThreshold">Winter Slab (kWh / month)</label>
+                                    <input type="number" id="rateWinterThreshold" class="form-control" step="10" value="1000" required>
+                                    <span class="form-help">Nov 1 to Apr 30 (1,000 kWh)</span>
+                                </div>
+                            </div>
+
+                            <div class="form-actions-split mt-3">
+                                <button type="button" class="btn btn-outline-warning" id="btnResetRates">
+                                    <i data-lucide="rotate-ccw"></i> Reset to Official Defaults
+                                </button>
+                                <button type="submit" class="btn btn-primary" id="btnSaveRates">
+                                    <i data-lucide="save"></i> Save Rate Schedule
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -483,7 +781,7 @@
         </div>
     </div>
 
-    <!-- Application JS (Cache-busted v=7) -->
-    <script src="app.js?v=7"></script>
+    <!-- Application JS (Cache-busted v=13) -->
+    <script src="app.js?v=13"></script>
 </body>
 </html>

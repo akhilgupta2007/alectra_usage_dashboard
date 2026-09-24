@@ -225,6 +225,31 @@ function formatLocalTime(timestampMs) {
     const mi = String(d.getMinutes()).padStart(2, '0');
     return `${yr}-${mo}-${da} ${hr}:${mi}`;
 }
+// Helper: Format a JS timestamp in ms to a short date string like "Jan 01, 2026"
+function formatShortDate(tsMs) {
+    if (!tsMs) return null;
+    const d = new Date(tsMs);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mo = months[d.getUTCMonth()];
+    const da = String(d.getUTCDate()).padStart(2, '0');
+    const yr = d.getUTCFullYear();
+    return `${mo} ${da}, ${yr}`;
+}
+
+// Helper: Build a compact date range string like "Jan 01 – Jan 30, 2026"
+function formatDateRange(fromMs, toMs) {
+    if (!fromMs) return null;
+    const dFrom = new Date(fromMs);
+    const dTo = toMs ? new Date(toMs) : dFrom;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const fromStr = `${months[dFrom.getUTCMonth()]} ${String(dFrom.getUTCDate()).padStart(2,'0')}`;
+    const toStr   = `${months[dTo.getUTCMonth()]} ${String(dTo.getUTCDate()).padStart(2,'0')}, ${dTo.getUTCFullYear()}`;
+    if (dFrom.getUTCFullYear() !== dTo.getUTCFullYear()) {
+        return `${fromStr}, ${dFrom.getUTCFullYear()} – ${toStr}`;
+    }
+    return `${fromStr} – ${toStr}`;
+}
+
 
 // Update KPI Stats Card
 function updateKPIs(data) {
@@ -302,6 +327,17 @@ function updateKPIs(data) {
 function updateTOUBreakdown(data) {
     const touCard = document.getElementById('touCard');
     if (!touCard) return;
+    
+    // Update date badge on the Rate & Tier card
+    const dateBadgeEl = document.getElementById('touCardDateBadge');
+    const dateBadgeTextEl = document.getElementById('touCardDateText');
+    const dateRangeStr = formatDateRange(data.date_from_ts, data.date_to_ts);
+    if (dateBadgeEl && dateBadgeTextEl && dateRangeStr) {
+        dateBadgeTextEl.textContent = dateRangeStr;
+        dateBadgeEl.classList.remove('hidden');
+    } else if (dateBadgeEl) {
+        dateBadgeEl.classList.add('hidden');
+    }
     
     const touSummary = data.tou_summary;
     const tierSummary = data.tier_summary;
@@ -447,6 +483,187 @@ function updateTOUBreakdown(data) {
         touCard.classList.remove('hidden');
     } else {
         touCard.classList.add('hidden');
+    }
+}
+
+// Update Estimated Alectra Bill Breakdown (Option C Layout)
+function updateEstimatedBill(data) {
+    const analyticsCard = document.getElementById('billingAnalyticsCard');
+    if (!analyticsCard) return;
+
+    const breakdown = data.bill_breakdown;
+    if (!breakdown || (breakdown.total_amount_due === undefined && breakdown.total_amount_due === null)) {
+        analyticsCard.classList.add('hidden');
+        return;
+    }
+
+    analyticsCard.classList.remove('hidden');
+
+    // Date Subtitle text — show actual data date range from API
+    const dateSubEl = document.getElementById('billingDateSubtitle');
+    const dateRangeStr = formatDateRange(data.date_from_ts, data.date_to_ts);
+    if (dateSubEl) {
+        if (dateRangeStr) {
+            dateSubEl.innerText = `${dateRangeStr} • ${breakdown.days_count.toFixed(0)} Days`;
+        } else {
+            const rangePreset = dateRangeSelect ? dateRangeSelect.options[dateRangeSelect.selectedIndex].text : 'Selected Period';
+            dateSubEl.innerText = `${rangePreset} • ${breakdown.days_count.toFixed(0)} Days Evaluated`;
+        }
+    }
+
+    // Update active plan read-only badge from API response
+    const planBadgeTextEl = document.getElementById('billActivePlanText');
+    if (planBadgeTextEl && breakdown.active_rate_plan) {
+        const planNames = {
+            'tou': 'Standard TOU',
+            'tiered': 'Tiered Pricing',
+            'ulo': 'Ultra-Low Overnight'
+        };
+        planBadgeTextEl.textContent = planNames[breakdown.active_rate_plan] || breakdown.active_rate_plan;
+    }
+
+    // OER badge
+    const oerBadge = document.getElementById('billOerBadge');
+    if (oerBadge) {
+        if (breakdown.apply_oer && breakdown.oer_percent > 0) {
+            oerBadge.style.display = 'inline-flex';
+            oerBadge.innerHTML = `<span class="badge-dot"></span> OER ${breakdown.oer_percent.toFixed(1)}% Applied`;
+        } else {
+            oerBadge.style.display = 'none';
+        }
+    }
+
+    // Hero Due Amount & Subtitle
+    const totalDueEl = document.getElementById('billTotalDue');
+    if (totalDueEl) {
+        totalDueEl.innerHTML = `$${breakdown.total_amount_due.toFixed(2)} <span class="currency">CAD</span>`;
+    }
+
+    const heroSubEl = document.getElementById('billHeroSub');
+    if (heroSubEl) {
+        const daysStr = breakdown.days_count.toFixed(0);
+        heroSubEl.innerText = dateRangeStr
+            ? `${dateRangeStr} • ${daysStr} Days`
+            : `Estimated Total Due • ${daysStr} Days Evaluated`;
+    }
+
+    // Pre-Rebate and OER credit metrics
+    const preRebateEl = document.getElementById('billPreRebateVal');
+    if (preRebateEl) {
+        preRebateEl.innerText = `$${breakdown.total_electricity_charges.toFixed(2)}`;
+    }
+    const oerCreditEl = document.getElementById('billOerCreditVal');
+    if (oerCreditEl) {
+        if (breakdown.apply_oer && breakdown.oer_rebate_amount > 0) {
+            oerCreditEl.innerText = `-$${breakdown.oer_rebate_amount.toFixed(2)}`;
+        } else {
+            oerCreditEl.innerText = '$0.00';
+        }
+    }
+
+    // Cost distribution bar segments
+    const totalCharges = breakdown.total_electricity_charges || 1;
+    const commPct = Math.max(5, (breakdown.commodity_cost / totalCharges) * 100);
+    const delivPct = Math.max(5, (breakdown.total_delivery_cost / totalCharges) * 100);
+    const regPct = Math.max(2, (breakdown.regulatory_cost / totalCharges) * 100);
+
+    const barComm = document.getElementById('barCommodity');
+    const barDeliv = document.getElementById('barDelivery');
+    const barReg = document.getElementById('barRegulatory');
+    if (barComm) barComm.style.width = `${commPct.toFixed(1)}%`;
+    if (barDeliv) barDeliv.style.width = `${delivPct.toFixed(1)}%`;
+    if (barReg) barReg.style.width = `${regPct.toFixed(1)}%`;
+
+    // Itemized statement rows
+    const commSub = document.getElementById('billCommoditySub');
+    const commAmt = document.getElementById('billCommodityAmt');
+    if (commSub) commSub.innerText = `Billed usage: ${breakdown.total_kwh.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} kWh`;
+    if (commAmt) commAmt.innerText = `$${breakdown.commodity_cost.toFixed(2)}`;
+
+    const delivSub = document.getElementById('billDeliverySub');
+    const delivAmt = document.getElementById('billDeliveryAmt');
+    if (delivSub) delivSub.innerText = `Fixed ($${breakdown.fixed_delivery_cost.toFixed(2)}/${breakdown.days_count}d) + Var (@ ${breakdown.line_loss_factor.toFixed(4)} loss)`;
+    if (delivAmt) delivAmt.innerText = `$${breakdown.total_delivery_cost.toFixed(2)}`;
+
+    const regSub = document.getElementById('billRegulatorySub');
+    const regAmt = document.getElementById('billRegulatoryAmt');
+    if (regSub) regSub.innerText = `IESO & RRRP ($${breakdown.regulatory_kwh.toFixed(6)}/kWh)`;
+    if (regAmt) regAmt.innerText = `$${breakdown.regulatory_cost.toFixed(2)}`;
+
+    const preTaxSub = document.getElementById('billPreTaxSubtotal');
+    if (preTaxSub) preTaxSub.innerText = `$${breakdown.total_electricity_charges.toFixed(2)}`;
+
+    const hstAmt = document.getElementById('billHstAmt');
+    if (hstAmt) hstAmt.innerText = breakdown.apply_hst ? `+$${breakdown.hst_amount.toFixed(2)}` : '$0.00';
+
+    const oerAmt = document.getElementById('billOerAmt');
+    if (oerAmt) oerAmt.innerText = breakdown.apply_oer ? `-$${breakdown.oer_rebate_amount.toFixed(2)}` : '$0.00';
+
+    const finalTotalAmt = document.getElementById('billFinalTotalAmt');
+    if (finalTotalAmt) finalTotalAmt.innerText = `$${breakdown.total_amount_due.toFixed(2)} CAD`;
+}
+
+// Update Smart Rate Advisor (Option C Layout)
+function updatePlanAdvisor(data) {
+    const advisor = data.plan_advisor;
+    if (!advisor) return;
+
+    // Schedule Subtitle
+    const schedSub = document.getElementById('advisorScheduleSubtitle');
+    if (schedSub) {
+        schedSub.innerText = `${advisor.season_name} Schedule`;
+    }
+
+    // Recommended Plan Banner
+    const bestPlanEl = document.getElementById('advisorBestPlanName');
+    if (bestPlanEl) bestPlanEl.innerText = advisor.recommended_plan;
+
+    const savingsAmtEl = document.getElementById('advisorSavingsAmount');
+    if (savingsAmtEl) {
+        if (advisor.savings_vs_active > 0.05) {
+            savingsAmtEl.innerText = `Est. Savings: $${advisor.savings_vs_active.toFixed(2)}`;
+            savingsAmtEl.style.display = 'inline-block';
+        } else {
+            savingsAmtEl.innerText = `Matches Lowest`;
+            savingsAmtEl.style.display = 'inline-block';
+        }
+    }
+
+    // 3-Plan Comparison Table Rows
+    const plansListEl = document.getElementById('advisorPlansList');
+    if (plansListEl && advisor.plan_costs) {
+        plansListEl.innerHTML = '';
+        const minCost = Math.min(...advisor.plan_costs.map(p => p.cost));
+        advisor.plan_costs.forEach(plan => {
+            const isBest = plan.name === advisor.recommended_plan;
+            const diff = plan.cost - minCost;
+            const diffText = isBest ? 'Best' : `+$${diff.toFixed(2)}`;
+
+            const row = document.createElement('div');
+            row.className = `advisor-plan-row ${isBest ? 'is-best' : ''}`;
+            row.innerHTML = `
+                <div class="advisor-plan-name-cell">
+                    ${isBest ? '<i data-lucide="check-circle" style="width:13px;height:13px;color:var(--color-production);flex-shrink:0;"></i>' : ''}
+                    <span>${plan.name}</span>
+                </div>
+                <div class="advisor-plan-cost-cell">
+                    $${plan.cost.toFixed(2)}
+                </div>
+                <div class="advisor-plan-diff-cell ${isBest ? 'is-best-diff' : ''}">
+                    ${diffText}
+                </div>
+            `;
+            plansListEl.appendChild(row);
+        });
+        if (window.lucide) {
+            lucide.createIcons({ root: plansListEl });
+        }
+    }
+
+    // AI Insight text
+    const insightEl = document.getElementById('advisorInsightText');
+    if (insightEl) {
+        insightEl.innerText = advisor.insight_text;
     }
 }
 
@@ -982,6 +1199,8 @@ async function fetchDrillDownData(startSec, endSec, targetRes) {
         renderChart(globalData);
         updateKPIs(globalData);
         updateTOUBreakdown(globalData);
+        updateEstimatedBill(globalData);
+        updatePlanAdvisor(globalData);
     } catch (err) {
         console.error("Error during drill-down:", err);
     } finally {
@@ -1021,21 +1240,13 @@ async function fetchDashboardData() {
     const resolution = resolutionSelect.value;
     const dateRange = dateRangeSelect.value;
     
-    let start = null;
-    let end = null;
-    const now = new Date();
-    
-    if (dateRange === 'latest_day') {
-        // Handled directly by backend to fetch the most recent available day in DB
-    } else if (dateRange === 'last_7_days') {
-        start = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 7) / 1000);
-    } else if (dateRange === 'last_30_days') {
-        start = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 30) / 1000);
-    } else if (dateRange === 'month_to_date') {
-        start = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), 1) / 1000);
-    } else if (dateRange === 'year_to_date') {
-        start = Math.floor(Date.UTC(now.getFullYear(), 0, 1) / 1000);
-    } else if (dateRange === 'custom') {
+    // For all presets, delegate date resolution to the backend (anchored to latest DB data).
+    // Only 'custom' computes start/end on the frontend.
+    let url = `/api/data?resolution=${resolution}&_t=${Date.now()}`;
+
+    if (dateRange === 'custom') {
+        let start = null;
+        let end = null;
         if (customStartInput.value) {
             const parts = customStartInput.value.split('-').map(Number);
             start = Math.floor(Date.UTC(parts[0], parts[1] - 1, parts[2]) / 1000);
@@ -1044,14 +1255,11 @@ async function fetchDashboardData() {
             const parts = customEndInput.value.split('-').map(Number);
             end = Math.floor(Date.UTC(parts[0], parts[1] - 1, parts[2], 23, 59, 59) / 1000);
         }
-    }
-    
-    let url = `/api/data?resolution=${resolution}&_t=${Date.now()}`;
-    if (dateRange === 'latest_day') {
-        url += `&date_range=latest_day`;
-    } else {
         if (start) url += `&start=${start}`;
         if (end) url += `&end=${end}`;
+    } else {
+        // All presets: pass as date_range and let backend anchor to MAX(timestamp) in DB
+        url += `&date_range=${dateRange}`;
     }
     
     try {
@@ -1064,6 +1272,8 @@ async function fetchDashboardData() {
         renderChart(globalData);
         updateKPIs(globalData);
         updateTOUBreakdown(globalData);
+        updateEstimatedBill(globalData);
+        updatePlanAdvisor(globalData);
     } catch (e) {
         console.error("Error fetching data:", e);
         showErrorToast(`Failed to load energy data: ${e.message || e}`, "Dashboard Data Error");
@@ -1290,10 +1500,216 @@ btnSync.addEventListener('click', async () => {
     }
 });
 
-// Settings Modal
+// Settings Modal & Tabs
 btnSettings.addEventListener('click', () => {
     settingsModal.classList.remove('hidden');
+    loadBillingParameters();
+    loadOebRates();
 });
+
+// Settings Modal Tab Navigation
+function initSettingsTabs() {
+    const tabBtns = document.querySelectorAll('.tab-nav-btn');
+    const tabPanes = document.querySelectorAll('.settings-tab-pane');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabPanes.forEach(p => {
+                p.classList.remove('active');
+                p.classList.add('hidden');
+            });
+
+            btn.classList.add('active');
+            const targetPane = document.getElementById(targetId);
+            if (targetPane) {
+                targetPane.classList.remove('hidden');
+                targetPane.classList.add('active');
+            }
+        });
+    });
+}
+
+// Billing Parameters Loading & Saving
+async function loadBillingParameters() {
+    try {
+        const res = await fetch('/api/billing/parameters');
+        if (!res.ok) return;
+        const p = await res.json();
+        const fixEl = document.getElementById('billingFixedDelivery');
+        const volEl = document.getElementById('billingVolumetricDelivery');
+        const lineEl = document.getElementById('billingLineLoss');
+        const regEl = document.getElementById('billingRegulatory');
+        const oerEl = document.getElementById('billingOerPercent');
+        const hstEl = document.getElementById('billingHstPercent');
+        const applyHstEl = document.getElementById('billingApplyHst');
+        const applyOerEl = document.getElementById('billingApplyOer');
+
+        if (fixEl) fixEl.value = p.monthly_fixed_delivery;
+        if (volEl) volEl.value = p.volumetric_delivery_kwh;
+        if (lineEl) lineEl.value = p.line_loss_factor;
+        if (regEl) regEl.value = p.regulatory_kwh;
+        if (oerEl) oerEl.value = p.oer_percent;
+        if (hstEl) hstEl.value = p.hst_percent;
+        if (applyHstEl) applyHstEl.checked = p.apply_hst;
+        if (applyOerEl) applyOerEl.checked = p.apply_oer;
+    } catch (e) {
+        console.error('Error loading billing parameters:', e);
+    }
+}
+
+const billingForm = document.getElementById('billingForm');
+const btnResetBillingParams = document.getElementById('btnResetBillingParams');
+
+if (billingForm) {
+    billingForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            monthly_fixed_delivery: parseFloat(document.getElementById('billingFixedDelivery').value),
+            volumetric_delivery_kwh: parseFloat(document.getElementById('billingVolumetricDelivery').value),
+            line_loss_factor: parseFloat(document.getElementById('billingLineLoss').value),
+            regulatory_kwh: parseFloat(document.getElementById('billingRegulatory').value),
+            oer_percent: parseFloat(document.getElementById('billingOerPercent').value),
+            hst_percent: parseFloat(document.getElementById('billingHstPercent').value),
+            apply_hst: document.getElementById('billingApplyHst').checked,
+            apply_oer: document.getElementById('billingApplyOer').checked
+        };
+
+        try {
+            const res = await fetch('/api/billing/parameters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert("Alectra Statement Billing Parameters saved successfully!");
+                settingsModal.classList.add('hidden');
+                fetchDashboardData();
+            } else {
+                alert("Failed to save billing parameters.");
+            }
+        } catch (err) {
+            console.error('Error saving billing parameters:', err);
+            alert("Error saving billing parameters.");
+        }
+    });
+}
+
+if (btnResetBillingParams) {
+    btnResetBillingParams.addEventListener('click', async () => {
+        if (confirm("Reset Alectra billing parameters to official defaults ($35.38 fixed, $0.0175/kWh var, 1.0341 line loss, 23.5% OER, 13% HST)?")) {
+            try {
+                const res = await fetch('/api/billing/parameters/reset', { method: 'POST' });
+                if (res.ok) {
+                    await loadBillingParameters();
+                    alert("Alectra billing parameters reset to official defaults!");
+                    fetchDashboardData();
+                }
+            } catch (err) {
+                console.error('Error resetting billing parameters:', err);
+            }
+        }
+    });
+}
+
+// OEB Rates Loading & Saving
+// UI displays rates in ¢/kWh; backend stores in $/kWh.
+// Multiply by 100 on load ($/kWh → ¢), divide by 100 on save (¢ → $/kWh).
+async function loadOebRates() {
+    try {
+        const res = await fetch('/api/billing/rates');
+        if (!res.ok) return;
+        const r = await res.json();
+
+        const touOn = document.getElementById('rateTouOnPeak');
+        const touMid = document.getElementById('rateTouMidPeak');
+        const touOff = document.getElementById('rateTouOffPeak');
+        const uloOver = document.getElementById('rateUloOvernight');
+        const uloOff = document.getElementById('rateUloOffPeak');
+        const uloMid = document.getElementById('rateUloMidPeak');
+        const uloOn = document.getElementById('rateUloOnPeak');
+        const tier1 = document.getElementById('rateTieredTier1');
+        const tier2 = document.getElementById('rateTieredTier2');
+        const sumSlab = document.getElementById('rateSummerThreshold');
+        const winSlab = document.getElementById('rateWinterThreshold');
+
+        // Convert $/kWh → ¢/kWh for display (round to 1 decimal)
+        const toCents = v => parseFloat((v * 100).toFixed(1));
+        if (touOn) touOn.value = toCents(r.tou_on_peak);
+        if (touMid) touMid.value = toCents(r.tou_mid_peak);
+        if (touOff) touOff.value = toCents(r.tou_off_peak);
+        if (uloOver) uloOver.value = toCents(r.ulo_ultra_low_overnight);
+        if (uloOff) uloOff.value = toCents(r.ulo_off_peak);
+        if (uloMid) uloMid.value = toCents(r.ulo_mid_peak);
+        if (uloOn) uloOn.value = toCents(r.ulo_on_peak);
+        if (tier1) tier1.value = toCents(r.tiered_tier1);
+        if (tier2) tier2.value = toCents(r.tiered_tier2);
+        if (sumSlab) sumSlab.value = r.summer_slab_kwh;
+        if (winSlab) winSlab.value = r.winter_slab_kwh;
+    } catch (e) {
+        console.error('Error loading OEB rates:', e);
+    }
+}
+
+const ratesForm = document.getElementById('ratesForm');
+const btnResetRates = document.getElementById('btnResetRates');
+
+if (ratesForm) {
+    ratesForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        // Convert ¢/kWh → $/kWh before sending to backend
+        const toDollars = v => parseFloat((parseFloat(v) / 100).toFixed(6));
+        const payload = {
+            tou_on_peak: toDollars(document.getElementById('rateTouOnPeak').value),
+            tou_mid_peak: toDollars(document.getElementById('rateTouMidPeak').value),
+            tou_off_peak: toDollars(document.getElementById('rateTouOffPeak').value),
+            ulo_ultra_low_overnight: toDollars(document.getElementById('rateUloOvernight').value),
+            ulo_off_peak: toDollars(document.getElementById('rateUloOffPeak').value),
+            ulo_mid_peak: toDollars(document.getElementById('rateUloMidPeak').value),
+            ulo_on_peak: toDollars(document.getElementById('rateUloOnPeak').value),
+            tiered_tier1: toDollars(document.getElementById('rateTieredTier1').value),
+            tiered_tier2: toDollars(document.getElementById('rateTieredTier2').value),
+            summer_slab_kwh: parseFloat(document.getElementById('rateSummerThreshold').value),
+            winter_slab_kwh: parseFloat(document.getElementById('rateWinterThreshold').value)
+        };
+
+        try {
+            const res = await fetch('/api/billing/rates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert("OEB Rate Schedule saved successfully!");
+                settingsModal.classList.add('hidden');
+                fetchDashboardData();
+            } else {
+                alert("Failed to save rate schedule.");
+            }
+        } catch (err) {
+            console.error('Error saving rate schedule:', err);
+            alert("Error saving rate schedule.");
+        }
+    });
+}
+
+if (btnResetRates) {
+    btnResetRates.addEventListener('click', async () => {
+        if (confirm("Reset OEB rate schedule to official Ontario Energy Board defaults?")) {
+            try {
+                const res = await fetch('/api/billing/rates/reset', { method: 'POST' });
+                if (res.ok) {
+                    await loadOebRates();
+                    alert("OEB rate schedule reset to official defaults!");
+                    fetchDashboardData();
+                }
+            } catch (err) {
+                console.error('Error resetting OEB rates:', err);
+            }
+        }
+    });
+}
 
 btnCloseSettings.addEventListener('click', () => {
     settingsModal.classList.add('hidden');
@@ -1591,6 +2007,7 @@ async function uploadFiles(files) {
 
 // Initial Loading
 window.addEventListener('load', () => {
+    initSettingsTabs();
     syncResolutionOptions();
     fetchStatus();
     fetchDashboardData();

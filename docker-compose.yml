@@ -20,6 +20,7 @@ services:
       - METER_NUMBER= # Optional: only needed if your account has multiple meters
       - LOGIN_PORTAL_URL=https://alectrautilitiesgbportal.savagedata.com/Connect/Authorize
       - SCRAPE_ON_STARTUP=true
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
     deploy:
       resources:

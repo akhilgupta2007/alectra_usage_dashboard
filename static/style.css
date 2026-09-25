@@ -39,6 +39,12 @@ body {
     gap: 24px;
 }
 
+.main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
 /* App Header */
 .app-header {
     display: flex;
@@ -618,6 +624,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
     padding: 24px 20px;
     transition: var(--transition);
     min-height: 250px;
+    height: 100%;
 }
 
 .dropzone-card:hover, .dropzone-card.dragover {
@@ -692,6 +699,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
     padding: 20px 24px;
     box-shadow: var(--shadow);
     min-height: 250px;
+    height: 100%;
 }
 
 .history-header {
@@ -755,7 +763,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 /* Scrollable List Container */
 .history-scroll-container {
     flex: 1;
-    max-height: 220px;
+    max-height: 280px;
     overflow-y: auto;
     padding-right: 6px;
 }
@@ -1088,32 +1096,43 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 
 /* TOU Breakdown Card Styles */
 .tou-card {
-    margin-top: 1.5rem;
+    margin-top: 0;
 }
 .tou-stats-container {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: 1rem 0;
+    gap: 10px;
+    padding: 0.5rem 0;
 }
 .tou-stat-item {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 16px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: var(--transition);
+}
+.tou-stat-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
 }
 .tou-stat-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.95rem;
-    font-weight: 500;
+    display: contents;
 }
 .tou-label {
-    padding: 0.25rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: 600;
+    width: 110px;
+    min-width: 110px;
+    text-align: center;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
+    order: 1;
+    flex-shrink: 0;
 }
 .tou-on-peak {
     background-color: rgba(239, 68, 68, 0.15);
@@ -1136,14 +1155,17 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
     color: #9ca3af;
 }
 .tou-progress-bar {
-    height: 10px;
-    background-color: rgba(255, 255, 255, 0.05);
-    border-radius: 5px;
+    flex: 1;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
     overflow: hidden;
+    order: 2;
+    min-width: 80px;
 }
 .tou-progress-fill {
     height: 100%;
-    border-radius: 5px;
+    border-radius: 4px;
     transition: width 0.4s ease;
 }
 .on-peak-fill {
@@ -1162,24 +1184,43 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
     background-color: #9ca3af;
 }
 
+/* Rate & Tier Values Alignment */
+.tou-stat-meta span:nth-child(2) {
+    order: 3;
+    width: 150px;
+    min-width: 150px;
+    text-align: right;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.tou-stat-meta span:nth-child(3) {
+    order: 4;
+    width: 75px;
+    min-width: 75px;
+    text-align: right;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
 /* Tiered Breakdown Styles */
 .breakdown-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 2rem;
-}
-@media (min-width: 768px) {
-    .breakdown-grid {
-        grid-template-columns: 1fr 1fr;
-    }
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 1.5rem;
 }
 .tou-stats-container h3 {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--text-secondary);
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     border-bottom: 1px solid var(--border-card);
     padding-bottom: 0.5rem;
 }
@@ -1208,23 +1249,43 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 /* Breakdown Total Row Styles */
 .tou-total-item {
     border-top: 1px solid var(--border-card);
-    padding-top: 12px;
-    margin-top: 10px;
+    background: rgba(56, 189, 248, 0.04);
+    border: 1px solid rgba(56, 189, 248, 0.15);
+    margin-top: 6px;
 }
 .tou-total-badge {
     background-color: rgba(56, 189, 248, 0.2);
     color: #38bdf8;
     font-weight: 700;
 }
-.breakdown-total-val {
+.tou-total-item .tou-stat-meta span:nth-child(2) {
+    margin-left: auto;
     font-weight: 700;
     color: #f3f4f6;
     font-size: 0.95rem;
 }
-.breakdown-total-cost {
+.tou-total-item .tou-stat-meta span:nth-child(3) {
     font-weight: 700;
     color: #38bdf8;
     font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+    .tou-stat-item {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .tou-progress-bar {
+        width: 100%;
+        order: 4;
+    }
+    .tou-stat-meta span:nth-child(2) {
+        order: 2;
+        margin-left: auto;
+    }
+    .tou-stat-meta span:nth-child(3) {
+        order: 3;
+    }
 }
 
 /* Drill-Down Badge Styles */
@@ -1464,7 +1525,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
     border-radius: var(--border-radius);
     padding: 24px;
     box-shadow: var(--shadow);
-    margin-bottom: 24px;
+    margin-bottom: 0;
     transition: var(--transition);
 }
 
@@ -1555,8 +1616,9 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 /* 3-Column Grid */
 .billing-analytics-grid {
     display: grid;
-    grid-template-columns: 1fr 1.1fr 1.15fr;
+    grid-template-columns: 1fr 1.15fr 1.15fr;
     gap: 24px;
+    align-items: stretch;
 }
 
 @media (max-width: 1024px) {
@@ -1569,6 +1631,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 .analytics-col {
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 .col-section-header {
@@ -1734,7 +1797,8 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 .statement-table {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    height: 100%;
 }
 
 .statement-row {
@@ -1782,7 +1846,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 .statement-row.row-final-total {
     border-top: 1px solid var(--border-card);
     padding-top: 10px;
-    margin-top: 4px;
+    margin-top: auto;
 }
 
 .statement-row.row-final-total .desc-name {
@@ -1889,9 +1953,32 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
 
 .advisor-plan-name-cell {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     color: var(--text-primary);
+}
+
+.advisor-plan-name-cell i {
+    margin-top: 2px;
+}
+
+.advisor-plan-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5px;
+}
+
+.advisor-plan-title {
+    display: block;
+    line-height: 1.25;
+}
+
+.advisor-plan-subtitle {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.2;
 }
 
 .advisor-plan-cost-cell {
@@ -1944,6 +2031,7 @@ select:focus, input[type="date"]:focus, input[type="time"]:focus, .form-control:
    ========================================================================== */
 .modal-content {
     max-width: 680px !important;
+    overflow-x: hidden !important;
 }
 
 .settings-nav-tabs {

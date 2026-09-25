@@ -17,6 +17,16 @@ Visualize your 15-minute smart meter intervals, track Time-of-Use (TOU) and Tier
 
 ## ✨ Features
 
+- **Alectra Tariff & Full Itemized Billing**:
+  - Reconciles your actual Alectra utility bill to the penny.
+  - Automatically calculates Electricity Commodity supply, Fixed Distribution ($30.80/mo prorated), Transmission & Volumetric Delivery with official 1.0341 Line Loss multiplier, IESO Wholesale Regulatory charges, 13% HST, and the 23.5% Ontario Electricity Rebate (OER) provincial credit.
+- **Smart Rate Advisor (All-Inclusive 3-Plan Simulation)**:
+  - Compares your real 15-minute smart meter intervals across all three Ontario plans: **Standard Time-of-Use (TOU)**, **Ultra-Low Overnight (ULO)**, and **Tiered Pricing**.
+  - High-precision timestamp classification with Ontario statutory holidays and weekend detection (no guesses).
+  - Season-aware & prorated tier thresholds (Summer 600 kWh vs. Winter 1,000 kWh).
+  - Displays the complete all-inclusive estimated bill with supply subtitles (`Supply: $XX.XX`) and calculates true net out-of-pocket savings.
+- **Runtime Billing & OEB Rate Settings**:
+  - Dedicated in-app modal to review and customize Alectra delivery parameters, loss factors, HST, OER percentages, and seasonal OEB rate schedules without editing code.
 - **Automated Daily Scraping**: Built-in headless Playwright bot that logs into the Alectra Green Button portal on a configurable schedule (e.g., daily at 06:00 AM) and automatically downloads your latest energy usage XML.
 - **Manual XML Import**: Drag-and-drop any standard Green Button XML file directly into the web UI for instant parsing and archiving.
 - **Dynamic Granularity & 15-Minute Drill-Down**:
@@ -25,14 +35,14 @@ Visualize your 15-minute smart meter intervals, track Time-of-Use (TOU) and Tier
 - **Ontario Time-of-Use (TOU) & Tier Breakdown**:
   - Automatically color-codes intervals by On-Peak, Mid-Peak, Off-Peak, and Ultra-Low Overnight (ULO) periods or Consumption Tiers.
   - Interactive tooltips showing breakdown, total import, and net balance on hover.
-  - Dedicated breakdown summary card with totals.
+  - Dedicated breakdown summary card with inline progress tracks and zero wasted void space.
 - **Lightweight & Self-Host Ready**:
   - Strict **< 500 MB RAM** footprint.
   - SQLite with Write-Ahead Logging (WAL) and C-level query aggregation for instant loading across years of data.
   - No external database or cloud subscription required.
-- **AI Assistant Integration (MCP Server)**:
+- **AI Assistant Integration (MCP Server v1.1.0)**:
   - Built-in Model Context Protocol (MCP) server over SSE (`/sse`) and Stdio (`mcp_server.py`).
-  - Allows AI assistants (Claude Desktop, Cursor, Antigravity, ChatGPT) to answer questions about your energy usage, peak demand, and billing trends.
+  - High-precision interval parsing, rate comparisons, and itemized billing queries for Claude Desktop, Cursor, Antigravity, and Home Assistant Assist.
 
 ---
 
@@ -185,11 +195,14 @@ Click the **Settings (⚙️)** button in the top navigation bar to configure ru
 The dashboard includes a full **Model Context Protocol (MCP)** server enabling AI tools to inspect your energy metrics.
 
 ### Exposed MCP Tools:
-1. `get_energy_summary(date_range, resolution)`: Retrieves consumption, production, and cost totals for any timeframe.
-2. `get_rate_breakdown(date_range)`: Returns breakdown by On-Peak, Mid-Peak, Off-Peak, ULO, and Tiers.
-3. `get_peak_demand(date_range)`: Finds the highest 15-minute peak demand (kW) interval.
-4. `get_system_status()`: Checks database status, last sync, and scraper logs.
-5. `trigger_sync()`: Schedules a scan of the import directory.
+1. `get_system_status()`: Database statistics, interval counts, date bounds, active rate plan, and scraper status.
+2. `get_billing_parameters()`: Active Alectra fixed/volumetric delivery rates, line loss factor (1.0341), regulatory charges, HST, and OER rebate percentages.
+3. `get_bill_estimate(start_date, end_date)`: Complete itemized Alectra billing statement (Commodity, Delivery, Regulatory, HST, OER credit, Total Due).
+4. `compare_rate_plans(start_date, end_date)`: 3-plan simulation (Standard TOU, ULO, Tiered) calculating full all-inclusive bills, commodity subtitles, and true net savings.
+5. `get_energy_summary(start_date, end_date)`: Consumption (kWh and $), solar export, peak demand, and multi-plan breakdowns.
+6. `get_rate_breakdown(start_date, end_date)`: Percentage distribution and effective rate ($/kWh) for active rate tiers, ULO slots, and consumption tiers.
+7. `get_interval_readings(start_date, end_date, resolution, limit)`: Time-series intervals (`15min`, `1h`, or `1d` with complete On-Peak, Mid-Peak, and Off-Peak breakdown).
+8. `trigger_folder_sync()`: Triggers an immediate scan and ingestion of new Green Button XML files.
 
 ### Antigravity IDE Configuration
 Add the server to your project's `.agents/mcp_config.json` (or global `~/.gemini/config/mcp_config.json`):

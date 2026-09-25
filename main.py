@@ -242,15 +242,15 @@ def reset_billing_parameters() -> Dict[str, Any]:
 
 def get_oeb_rates() -> Dict[str, Any]:
     return {
-        "tou_on_peak": float(get_setting('rate_tou_on_peak', '0.182')),
-        "tou_mid_peak": float(get_setting('rate_tou_mid_peak', '0.122')),
-        "tou_off_peak": float(get_setting('rate_tou_off_peak', '0.087')),
-        "ulo_ultra_low_overnight": float(get_setting('rate_ulo_ultra_low_overnight', '0.028')),
-        "ulo_off_peak": float(get_setting('rate_ulo_off_peak', '0.087')),
-        "ulo_mid_peak": float(get_setting('rate_ulo_mid_peak', '0.122')),
-        "ulo_on_peak": float(get_setting('rate_ulo_on_peak', '0.286')),
-        "tiered_tier1": float(get_setting('rate_tiered_tier1', '0.103')),
-        "tiered_tier2": float(get_setting('rate_tiered_tier2', '0.125')),
+        "tou_on_peak": float(get_setting('rate_tou_on_peak', '0.203')),
+        "tou_mid_peak": float(get_setting('rate_tou_mid_peak', '0.157')),
+        "tou_off_peak": float(get_setting('rate_tou_off_peak', '0.098')),
+        "ulo_ultra_low_overnight": float(get_setting('rate_ulo_ultra_low_overnight', '0.039')),
+        "ulo_off_peak": float(get_setting('rate_ulo_off_peak', '0.098')),
+        "ulo_mid_peak": float(get_setting('rate_ulo_mid_peak', '0.157')),
+        "ulo_on_peak": float(get_setting('rate_ulo_on_peak', '0.391')),
+        "tiered_tier1": float(get_setting('rate_tiered_tier1', '0.120')),
+        "tiered_tier2": float(get_setting('rate_tiered_tier2', '0.142')),
         "summer_slab_kwh": float(get_setting('rate_tiered_threshold_summer', '600.0')),
         "winter_slab_kwh": float(get_setting('rate_tiered_threshold_winter', '1000.0'))
     }
@@ -434,12 +434,15 @@ def calculate_plan_advisor(
     days_count: float,
     rates: Dict[str, Any] = None,
     sample_ts: int = None,
-    active_rate_plan: str = 'tou'
+    active_rate_plan: str = 'tou',
+    billing_params: Dict[str, Any] = None
 ) -> Optional[Dict[str, Any]]:
     if total_kwh <= 0.0:
         return None
     if rates is None:
         rates = get_oeb_rates()
+    if billing_params is None:
+        billing_params = get_billing_parameters()
 
     effective_days = max(1.0, days_count if days_count > 0 else 30.0)
 
@@ -455,14 +458,14 @@ def calculate_plan_advisor(
     monthly_slab = rates['summer_slab_kwh'] if is_summer else rates['winter_slab_kwh']
     effective_slab = max(1.0, (effective_days / 30.0) * monthly_slab)
 
-    # 1. Standard TOU
+    # 1. Standard TOU Commodity
     on_peak = tou_summary.get('on_peak_kwh', 0.0)
     mid_peak = tou_summary.get('mid_peak_kwh', 0.0)
     off_peak = tou_summary.get('off_peak_kwh', 0.0)
     ulo_base = tou_summary.get('ulo_kwh', 0.0)
     cost_tou = (on_peak * rates['tou_on_peak']) + (mid_peak * rates['tou_mid_peak']) + ((off_peak + ulo_base) * rates['tou_off_peak'])
 
-    # 2. Ultra-Low Overnight (ULO)
+    # 2. Ultra-Low Overnight (ULO) Commodity
     kwh_ulo_overnight = ulo_summary.get('ultra_low_overnight_kwh', 0.0)
     kwh_ulo_off_peak = ulo_summary.get('off_peak_kwh', 0.0)
     kwh_ulo_mid_peak = ulo_summary.get('mid_peak_kwh', 0.0)
@@ -473,34 +476,75 @@ def calculate_plan_advisor(
                (kwh_ulo_mid_peak * rates['ulo_mid_peak']) + \
                (kwh_ulo_on_peak * rates['ulo_on_peak'])
 
-    # 3. Tiered Pricing
+    # 3. Tiered Pricing Commodity
     t1 = min(total_kwh, effective_slab)
     t2 = max(0.0, total_kwh - effective_slab)
     cost_tiered = (t1 * rates['tiered_tier1']) + (t2 * rates['tiered_tier2'])
 
+    # Full Bill Components (Delivery, Regulatory, Taxes, Rebate)
+    adj_kwh = total_kwh * billing_params.get('line_loss_factor', 1.0341)
+    fixed_delivery = billing_params.get('monthly_fixed_delivery', 30.80) * (effective_days / 30.0)
+    variable_delivery = adj_kwh * billing_params.get('volumetric_delivery_kwh', 0.0252)
+    total_delivery = fixed_delivery + variable_delivery
+    regulatory = total_kwh * billing_params.get('regulatory_kwh', 0.005983)
+    apply_hst = billing_params.get('apply_hst', True)
+    hst_pct = (billing_params.get('hst_percent', 13.0) / 100.0) if apply_hst else 0.0
+    apply_oer = billing_params.get('apply_oer', True)
+    oer_pct = (billing_params.get('oer_percent', 23.5) / 100.0) if apply_oer else 0.0
+
+    def calc_plan_full_bill(commodity_val: float) -> float:
+        sub = commodity_val + total_delivery + regulatory
+        tax = sub * hst_pct
+        rebate = sub * oer_pct
+        return sub + tax - rebate
+
+    bill_tou = calc_plan_full_bill(cost_tou)
+    bill_ulo = calc_plan_full_bill(cost_ulo)
+    bill_tiered = calc_plan_full_bill(cost_tiered)
+
     plan_costs = [
-        {"id": "tou", "name": "Standard TOU", "cost": round(cost_tou, 2), "rate_desc": f"{rates['tou_on_peak']*100:.1f}¢ / {rates['tou_mid_peak']*100:.1f}¢ / {rates['tou_off_peak']*100:.1f}¢"},
-        {"id": "ulo", "name": "Ultra-Low Overnight (ULO)", "cost": round(cost_ulo, 2), "rate_desc": f"{rates['ulo_ultra_low_overnight']*100:.1f}¢ / {rates['ulo_off_peak']*100:.1f}¢ / {rates['ulo_mid_peak']*100:.1f}¢ / {rates['ulo_on_peak']*100:.1f}¢"},
-        {"id": "tiered", "name": "Tiered Pricing", "cost": round(cost_tiered, 2), "rate_desc": f"{rates['tiered_tier1']*100:.1f}¢ (<={effective_slab:.0f} kWh) / {rates['tiered_tier2']*100:.1f}¢"}
+        {
+            "id": "tou",
+            "name": "Standard TOU",
+            "cost": round(bill_tou, 2),
+            "commodity_cost": round(cost_tou, 2),
+            "rate_desc": f"{rates['tou_on_peak']*100:.1f}¢ / {rates['tou_mid_peak']*100:.1f}¢ / {rates['tou_off_peak']*100:.1f}¢",
+            "subtitle": f"Supply: ${cost_tou:.2f}"
+        },
+        {
+            "id": "ulo",
+            "name": "Ultra-Low Overnight (ULO)",
+            "cost": round(bill_ulo, 2),
+            "commodity_cost": round(cost_ulo, 2),
+            "rate_desc": f"{rates['ulo_ultra_low_overnight']*100:.1f}¢ / {rates['ulo_off_peak']*100:.1f}¢ / {rates['ulo_mid_peak']*100:.1f}¢ / {rates['ulo_on_peak']*100:.1f}¢",
+            "subtitle": f"Supply: ${cost_ulo:.2f}"
+        },
+        {
+            "id": "tiered",
+            "name": "Tiered Pricing",
+            "cost": round(bill_tiered, 2),
+            "commodity_cost": round(cost_tiered, 2),
+            "rate_desc": f"{rates['tiered_tier1']*100:.1f}¢ (<={effective_slab:.0f} kWh) / {rates['tiered_tier2']*100:.1f}¢",
+            "subtitle": f"Supply: ${cost_tiered:.2f}"
+        }
     ]
 
-    active_cost = next((p["cost"] for p in plan_costs if p["id"] == active_rate_plan), cost_tou)
+    active_plan_obj = next((p for p in plan_costs if p["id"] == active_rate_plan), plan_costs[0])
     best_plan = min(plan_costs, key=lambda p: p["cost"])
-    savings_vs_active = max(0.0, round(active_cost - best_plan["cost"], 2))
+    savings_vs_active = max(0.0, round(active_plan_obj["cost"] - best_plan["cost"], 2))
     is_active_best = (active_rate_plan == best_plan["id"])
 
     # Build context-aware advice comparing to active plan
-    active_plan_obj = next((p for p in plan_costs if p["id"] == active_rate_plan), plan_costs[0])
     if is_active_best:
         if best_plan["id"] == "tiered":
-            insight_text = f"You are currently on Tiered Pricing, which is already your most cost-effective option! With {effective_slab:.0f} kWh {season_name} slab for {effective_days:.0f} days, your habits maximize savings without peak penalties."
+            insight_text = f"You are currently on Tiered Pricing, which is already your most cost-effective option (${best_plan['cost']:.2f} total bill). With {effective_slab:.0f} kWh {season_name} slab for {effective_days:.0f} days, your habits maximize savings without peak penalties."
         elif best_plan["id"] == "ulo":
             overnight_pct = (kwh_ulo_overnight / total_kwh * 100.0) if total_kwh > 0 else 0.0
-            insight_text = f"You are currently on Ultra-Low Overnight, which is already your most cost-effective option ({overnight_pct:.0f}% overnight consumption)."
+            insight_text = f"You are currently on Ultra-Low Overnight, which is already your most cost-effective option (${best_plan['cost']:.2f} total bill, {overnight_pct:.0f}% overnight consumption)."
         else:
-            insight_text = "You are currently on Standard Time-of-Use, which is your most optimal plan. Continue shifting heavy appliance loads away from On-Peak windows."
+            insight_text = f"You are currently on Standard Time-of-Use, which is your most optimal plan (${best_plan['cost']:.2f} total bill). Continue shifting heavy appliance loads away from On-Peak windows."
     else:
-        insight_text = f"You are on {active_plan_obj['name']}. Switching to {best_plan['name']} would save approximately ${savings_vs_active:.2f} CAD for this {effective_days:.0f}-day evaluated period."
+        insight_text = f"You are on {active_plan_obj['name']} (${active_plan_obj['cost']:.2f} total bill). Switching to {best_plan['name']} (${best_plan['cost']:.2f} total bill) would save approximately ${savings_vs_active:.2f} CAD on your final bill for this {effective_days:.0f}-day evaluated period."
 
     return {
         "active_rate_plan": active_rate_plan,
@@ -1404,7 +1448,7 @@ def get_data(
             total_import, total_import_cost, days_count, billing_params, active_plan, tou_summary, ulo_summary, oeb_rates, sample_ts
         )
         result["plan_advisor"] = calculate_plan_advisor(
-            total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan
+            total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan, billing_params
         )
 
         return result

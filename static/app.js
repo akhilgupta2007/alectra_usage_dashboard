@@ -639,12 +639,19 @@ function updatePlanAdvisor(data) {
             const diff = plan.cost - minCost;
             const diffText = isBest ? 'Best' : `+$${diff.toFixed(2)}`;
 
+            const subtitleHtml = plan.subtitle
+                ? `<span class="advisor-plan-subtitle">${plan.subtitle}</span>`
+                : (plan.commodity_cost !== undefined ? `<span class="advisor-plan-subtitle">Supply: $${plan.commodity_cost.toFixed(2)}</span>` : '');
+
             const row = document.createElement('div');
             row.className = `advisor-plan-row ${isBest ? 'is-best' : ''}`;
             row.innerHTML = `
                 <div class="advisor-plan-name-cell">
                     ${isBest ? '<i data-lucide="check-circle" style="width:13px;height:13px;color:var(--color-production);flex-shrink:0;"></i>' : ''}
-                    <span>${plan.name}</span>
+                    <div class="advisor-plan-info">
+                        <span class="advisor-plan-title">${plan.name}</span>
+                        ${subtitleHtml}
+                    </div>
                 </div>
                 <div class="advisor-plan-cost-cell">
                     $${plan.cost.toFixed(2)}

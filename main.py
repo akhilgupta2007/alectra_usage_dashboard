@@ -836,9 +836,14 @@ def start_daily_scraper():
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
 
+APP_VERSION = "v1.1.0"
+
 # API Endpoints
 @app.on_event("startup")
 def startup_event():
+    print("==================================================")
+    print(f"    Alectra Green Button Energy Dashboard {APP_VERSION}")
+    print("==================================================")
     init_db()
     set_setting('scraper_active', 'false')
     start_folder_scanner()
@@ -888,6 +893,7 @@ def get_status():
         } for r in files_rows]
 
         return {
+            "version": APP_VERSION,
             "total_readings": total_readings,
             "consumption_readings": consumption_readings,
             "production_readings": production_readings,

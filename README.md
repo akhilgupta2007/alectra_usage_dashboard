@@ -19,7 +19,7 @@ Visualize your 15-minute smart meter intervals, track Time-of-Use (TOU) and Tier
 
 - **Alectra Tariff & Full Itemized Billing**:
   - Reconciles your actual Alectra utility bill to the penny.
-  - Automatically calculates Electricity Commodity supply, Fixed Distribution ($30.80/mo prorated), Transmission & Volumetric Delivery with official 1.0341 Line Loss multiplier, IESO Wholesale Regulatory charges, 13% HST, and the 23.5% Ontario Electricity Rebate (OER) provincial credit.
+  - Automatically calculates Electricity Commodity supply, Fixed Distribution ($35.38/mo prorated), Transmission & Volumetric Delivery ($0.0175/kWh) with official 1.0341 Line Loss multiplier, IESO Wholesale Regulatory charges ($0.005983/kWh), 13% HST, and the 23.5% Ontario Electricity Rebate (OER) provincial credit.
 - **Smart Rate Advisor (All-Inclusive 3-Plan Simulation)**:
   - Compares your real 15-minute smart meter intervals across all three Ontario plans: **Standard Time-of-Use (TOU)**, **Ultra-Low Overnight (ULO)**, and **Tiered Pricing**.
   - High-precision timestamp classification with Ontario statutory holidays and weekend detection (no guesses).
@@ -336,6 +336,25 @@ Open `http://127.0.0.1:8000` in your browser.
 - **100% Local & Self-Hosted**: All meter readings, timestamps, and cost data remain inside your local SQLite database or Docker volume. No external analytics, telemetry, or third-party servers are contacted.
 - **Credentials Handling**: Scraper credentials are read strictly from environment variables and never logged or exposed via API endpoints.
 - **Git Ready**: A pre-configured `.gitignore` ensures that database files (`*.db`), downloaded XML files (`data/`), Python bytecode (`__pycache__/`), and credentials files (`.env`) are never committed to version control.
+
+---
+
+## 📜 Release Notes & Changelog
+
+### `v1.1.0` (Latest Release)
+- **Alectra Billing & Tariff Analytics**:
+  - Full penny-accurate statement reconciliation (Electricity Supply, Fixed Distribution, Volumetric Delivery with 1.0341 line loss factor, Wholesale Regulatory charges, 13% HST, and 23.5% OER rebate credit).
+  - Smart Rate Advisor: Simulated 3-plan comparison across Standard TOU, Ultra-Low Overnight (ULO), and Tiered Pricing with prorated seasonal thresholds (Summer 600 kWh vs Winter 1,000 kWh).
+  - Runtime Settings Modal: Allows editing fixed delivery, volumetric rates, line loss factors, and OEB rate schedules without container restarts.
+- **Model Context Protocol (MCP Server v1.1.0)**:
+  - Added SSE endpoint at `/sse` and Stdio integration (`mcp_server.py`) exposing 8 high-precision analytical tools for Claude Desktop, Antigravity, Cursor, and Home Assistant Assist.
+- **Memory & Reliability Optimizations**:
+  - Enforced `MALLOC_ARENA_MAX=2` and glibc `malloc_trim(0)` garbage collection routines to prevent heap fragmentation, keeping RAM strictly `< 500 MB`.
+  - Added 3-attempt automated scraper retry with smart delay escalation and phone number auto-formatting.
+- **Version Tracking & Observability**:
+  - Added visible `v1.1.0` release badge in dashboard header and settings modal.
+  - Added ASCII startup version banner to Docker stdout logs on container initialization.
+  - Added `"version": "v1.1.0"` to the `/api/status` API endpoint.
 
 ---
 

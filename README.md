@@ -341,7 +341,19 @@ Open `http://127.0.0.1:8000` in your browser.
 
 ## 📜 Release Notes & Changelog
 
-### `v1.1.0` (Latest Release)
+### `v1.1.1` (Latest Release)
+- **High-RAM & Memory Footprint Optimization**:
+  - Integrated explicit `release_memory()` (forced `gc.collect()` and Linux glibc `malloc_trim(0)`) directly into `/api/data` requests to release allocated pymalloc arenas back to the host OS immediately upon completing data queries, preventing idle RAM accumulation.
+  - Reduced SQLite `PRAGMA cache_size` to 3 MB (`-3000`) and added `PRAGMA wal_autocheckpoint=500` to prevent WAL journal log bloat from consuming container memory.
+- **MCP & Client Protocol Compatibility**:
+  - Added fallback handler for `POST /sse` returning `{"status": "ok"}` to eliminate HTTP 405 Method Not Allowed loops from modern MCP clients.
+  - Added RFC 9728 OAuth 2.0 Protected Resource Metadata probe endpoints (`/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/sse`) to cleanly satisfy unauthenticated MCP client handshakes and silence HTTP 404 errors.
+- **Log Noise Reduction**:
+  - Silenced repeated folder scanner idle log output (`Scanning directory... Inserted 0 intervals`), ensuring scanner status messages only print when new XML files or intervals are actually ingested.
+- **Version Tracking**:
+  - Updated application version badges to `v1.1.1` across header, settings modal, API status endpoint, and container startup banner.
+
+### `v1.1.0`
 - **Alectra Billing & Tariff Analytics**:
   - Full penny-accurate statement reconciliation (Electricity Supply, Fixed Distribution, Volumetric Delivery with 1.0341 line loss factor, Wholesale Regulatory charges, 13% HST, and 23.5% OER rebate credit).
   - Smart Rate Advisor: Simulated 3-plan comparison across Standard TOU, Ultra-Low Overnight (ULO), and Tiered Pricing with prorated seasonal thresholds (Summer 600 kWh vs Winter 1,000 kWh).

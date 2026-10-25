@@ -56,7 +56,8 @@ def init_db():
     with get_db() as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA cache_size=-8000") # 8MB cache limit
+        conn.execute("PRAGMA cache_size=-3000") # 3MB cache limit
+        conn.execute("PRAGMA wal_autocheckpoint=500")
         conn.execute("PRAGMA temp_store=MEMORY")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS readings (
@@ -587,8 +588,6 @@ def scan_and_import_directory():
     scan_folder = get_setting('scan_folder_path', SCAN_DIR)
     archive_retention = float(get_setting('archive_retention_days', '60'))
     
-    print(f"Scanning directory: {scan_folder}, retention {archive_retention}d")
-    
     if not os.path.exists(scan_folder):
         error_msg = f"Path {scan_folder} does not exist"
         set_setting('last_sync_error', error_msg)
@@ -605,6 +604,9 @@ def scan_and_import_directory():
         total_files = len(files)
         files_processed = 0
         total_records_inserted = 0
+        
+        if total_files > 0:
+            print(f"Scanning directory: {scan_folder} ({total_files} pending files), retention {archive_retention}d")
         
         for file in sorted(files):
             file_path = os.path.join(scan_folder, file)
@@ -691,7 +693,8 @@ def scan_and_import_directory():
             
         set_setting('last_sync_time', datetime.now(timezone.utc).isoformat())
         set_setting('last_sync_error', '')
-        print(f"Sync complete. Processed/checked files. Inserted {total_records_inserted} intervals.")
+        if total_records_inserted > 0 or files_processed > 0:
+            print(f"Sync complete. Processed {files_processed} files. Inserted {total_records_inserted} intervals.")
         
     except Exception as e:
         error_msg = f"Sync Error: {str(e)}"
@@ -836,7 +839,7 @@ def start_daily_scraper():
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
 
-APP_VERSION = "v1.1.0"
+APP_VERSION = "v1.1.1"
 
 # API Endpoints
 @app.on_event("startup")
@@ -1457,6 +1460,8 @@ def get_data(
             total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan, billing_params
         )
 
+        # Release memory and arena allocations back to OS
+        release_memory()
         return result
 
 
@@ -1511,6 +1516,19 @@ def trigger_manual_scrape(req: ManualScrapeRequest, background_tasks: Background
 
     background_tasks.add_task(run_scraper_task)
     return {"status": "success", "message": "Manual scraper run scheduled in background."}
+
+# Handle RFC 9728 OAuth Protected Resource Metadata probe from MCP clients
+@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/sse")
+def oauth_protected_resource_metadata():
+    """Returns empty JSON for local MCP clients probing for OAuth 2.0 metadata without auth."""
+    return {}
+
+# Fallback for MCP clients that mistakenly POST to /sse instead of /messages
+@app.post("/sse")
+async def sse_post_handler():
+    """Accepts POST /sse requests and responds with 200 to prevent 405 loop from clients."""
+    return {"status": "ok"}
 
 # Mount MCP SSE Server endpoints
 try:

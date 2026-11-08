@@ -513,13 +513,18 @@ function updateEstimatedBill(data) {
 
     // Update active plan read-only badge from API response
     const planBadgeTextEl = document.getElementById('billActivePlanText');
-    if (planBadgeTextEl && breakdown.active_rate_plan) {
+    if (planBadgeTextEl) {
         const planNames = {
             'tou': 'Standard TOU',
             'tiered': 'Tiered Pricing',
             'ulo': 'Ultra-Low Overnight'
         };
-        planBadgeTextEl.textContent = planNames[breakdown.active_rate_plan] || breakdown.active_rate_plan;
+        if (breakdown.is_blended && breakdown.plan_windows && breakdown.plan_windows.length > 1) {
+            const summaryParts = breakdown.plan_windows.map(w => `${planNames[w.plan] || w.plan} (${w.start_date.substring(5)})`);
+            planBadgeTextEl.textContent = `Multi-Plan: ${summaryParts.join(' → ')}`;
+        } else if (breakdown.active_rate_plan) {
+            planBadgeTextEl.textContent = planNames[breakdown.active_rate_plan] || breakdown.active_rate_plan;
+        }
     }
 
     // OER badge
@@ -577,7 +582,13 @@ function updateEstimatedBill(data) {
     // Itemized statement rows
     const commSub = document.getElementById('billCommoditySub');
     const commAmt = document.getElementById('billCommodityAmt');
-    if (commSub) commSub.innerText = `Billed usage: ${breakdown.total_kwh.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} kWh`;
+    if (commSub) {
+        if (breakdown.commodity_split && breakdown.commodity_split.text) {
+            commSub.innerText = `${breakdown.commodity_split.text} • Total: ${breakdown.total_kwh.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} kWh`;
+        } else {
+            commSub.innerText = `Billed usage: ${breakdown.total_kwh.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} kWh`;
+        }
+    }
     if (commAmt) commAmt.innerText = `$${breakdown.commodity_cost.toFixed(2)}`;
 
     const delivSub = document.getElementById('billDeliverySub');
@@ -1561,6 +1572,7 @@ async function loadBillingParameters() {
         if (hstEl) hstEl.value = p.hst_percent;
         if (applyHstEl) applyHstEl.checked = p.apply_hst;
         if (applyOerEl) applyOerEl.checked = p.apply_oer;
+        await loadPlanHistory();
     } catch (e) {
         console.error('Error loading billing parameters:', e);
     }
@@ -1620,7 +1632,116 @@ if (btnResetBillingParams) {
     });
 }
 
-// OEB Rates Loading & Saving
+// Rate Plan History Management
+async function loadPlanHistory() {
+    const tableBody = document.getElementById('planHistoryTableBody');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch('/api/billing/plan-history');
+        if (!res.ok) return;
+        const data = await res.json();
+        const history = data.history || [];
+        const activePlan = data.active_plan || 'tou';
+
+        if (history.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:12px; color:#94a3b8;">No plan transitions recorded.</td></tr>`;
+            return;
+        }
+
+        const planNames = {
+            'tou': 'Standard Time-of-Use (TOU)',
+            'tiered': 'Tiered Pricing',
+            'ulo': 'Ultra-Low Overnight (ULO)'
+        };
+        const planBadges = {
+            'tou': '<span style="background:rgba(16,185,129,0.2); color:#10b981; border:1px solid #10b981; border-radius:4px; padding:2px 6px; font-weight:600;">TOU</span>',
+            'tiered': '<span style="background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:2px 6px; font-weight:600;">Tiered</span>',
+            'ulo': '<span style="background:rgba(139,92,246,0.2); color:#a78bfa; border:1px solid #a78bfa; border-radius:4px; padding:2px 6px; font-weight:600;">ULO</span>'
+        };
+
+        const todayStr = new Date().toISOString().substring(0, 10);
+        let rowsHTML = '';
+        history.forEach((item, idx) => {
+            const isDefault = item.effective_date === '1970-01-01';
+            const effDateDisplay = isDefault ? 'Default Baseline' : item.effective_date;
+            const badge = planBadges[item.plan] || item.plan;
+            const name = planNames[item.plan] || item.plan;
+            const isCurrentlyActive = (item.effective_date <= todayStr) && (idx === history.length - 1 || history[idx + 1].effective_date > todayStr);
+            const statusBadge = isCurrentlyActive ? 
+                '<span style="color:#38bdf8; font-weight:600;">● Active</span>' : 
+                (item.effective_date > todayStr ? '<span style="color:#f59e0b;">Upcoming</span>' : '<span style="color:#64748b;">Historical</span>');
+
+            const deleteBtn = (isDefault || history.length <= 1) ? 
+                `<span style="color:#64748b; font-size:0.75rem;">Default</span>` : 
+                `<button type="button" class="btn btn-icon" onclick="deletePlanTransition(${item.id})" style="color:#ef4444; padding:2px 6px;" title="Delete transition"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>`;
+
+            rowsHTML += `
+                <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
+                    <td style="padding: 8px;"><strong>${effDateDisplay}</strong></td>
+                    <td style="padding: 8px;">${badge} <span style="margin-left:4px; color:#cbd5e1;">${name}</span></td>
+                    <td style="padding: 8px;">${statusBadge}</td>
+                    <td style="padding: 8px; text-align: right;">${deleteBtn}</td>
+                </tr>
+            `;
+        });
+        tableBody.innerHTML = rowsHTML;
+        if (window.lucide) lucide.createIcons();
+    } catch (e) {
+        console.error('Error loading rate plan history:', e);
+    }
+}
+
+window.deletePlanTransition = async function(id) {
+    if (!confirm("Delete this rate plan transition? Historical dates will revert to the preceding plan.")) return;
+    try {
+        const res = await fetch(`/api/billing/plan-history/${id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.status === 'success') {
+            await loadPlanHistory();
+            fetchDashboardData();
+        } else {
+            alert(result.message || "Failed to delete transition.");
+        }
+    } catch (err) {
+        console.error("Error deleting transition:", err);
+    }
+};
+
+const addPlanTransitionForm = document.getElementById('addPlanTransitionForm');
+if (addPlanTransitionForm) {
+    // Set default date input to today
+    const dateInput = document.getElementById('newPlanEffectiveDate');
+    if (dateInput) {
+        dateInput.value = new Date().toISOString().substring(0, 10);
+    }
+
+    addPlanTransitionForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const plan = document.getElementById('newPlanSelect').value;
+        const effectiveDate = document.getElementById('newPlanEffectiveDate').value;
+        if (!plan || !effectiveDate) return;
+
+        try {
+            const res = await fetch('/api/billing/plan-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan: plan, effective_date: effectiveDate })
+            });
+            const result = await res.json();
+            if (result.status === 'success') {
+                await loadPlanHistory();
+                fetchDashboardData();
+                alert(`Added rate plan transition: ${plan.toUpperCase()} effective from ${effectiveDate}`);
+            } else {
+                alert(result.message || "Failed to add transition.");
+            }
+        } catch (err) {
+            console.error("Error adding transition:", err);
+            alert("Error adding transition.");
+        }
+    });
+}
 // UI displays rates in ¢/kWh; backend stores in $/kWh.
 // Multiply by 100 on load ($/kWh → ¢), divide by 100 on save (¢ → $/kWh).
 async function loadOebRates() {

@@ -115,6 +115,13 @@ def init_db():
                 value TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rate_plan_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan TEXT NOT NULL CHECK(plan IN ('tou', 'tiered', 'ulo')),
+                effective_date TEXT NOT NULL UNIQUE
+            )
+        """)
         
         # Insert default settings
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('time_shift_hours', '0')")
@@ -153,6 +160,18 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tiered_threshold_summer', '600.0')")
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_tiered_threshold_winter', '1000.0')")
 
+        # Seed rate_plan_history if empty
+        row = conn.execute("SELECT COUNT(*) FROM rate_plan_history").fetchone()
+        if row and row[0] == 0:
+            existing_plan = 'tou'
+            try:
+                s_row = conn.execute("SELECT value FROM settings WHERE key = 'active_rate_plan'").fetchone()
+                if s_row and s_row['value'] in ('tou', 'tiered', 'ulo'):
+                    existing_plan = s_row['value']
+            except Exception:
+                pass
+            conn.execute("INSERT INTO rate_plan_history (plan, effective_date) VALUES (?, '1970-01-01')", (existing_plan,))
+
 # Get settings helpers
 def get_setting(key, default=""):
     try:
@@ -162,15 +181,66 @@ def get_setting(key, default=""):
     except Exception:
         return default
 
+# Rate Plan History & Resolution Engine
+def get_rate_plan_history(conn=None) -> List[Dict[str, Any]]:
+    """Returns the ordered list of rate plan transitions (earliest to latest)."""
+    try:
+        def _fetch(c):
+            rows = c.execute("SELECT id, plan, effective_date FROM rate_plan_history ORDER BY effective_date ASC, id ASC").fetchall()
+            return [{"id": r["id"], "plan": r["plan"], "effective_date": r["effective_date"]} for r in rows]
+        
+        if conn is not None:
+            return _fetch(conn)
+        with get_db() as c:
+            return _fetch(c)
+    except Exception as e:
+        print(f"Error fetching rate_plan_history: {e}")
+        return [{"id": 0, "plan": "tou", "effective_date": "1970-01-01"}]
+
+def resolve_plan_for_date(history: List[Dict[str, Any]], date_str: str) -> str:
+    """
+    Given history sorted by effective_date ASC and a target date_str ('YYYY-MM-DD'),
+    returns the plan in effect on that date.
+    """
+    if not history:
+        return 'tou'
+    current_plan = history[0].get('plan', 'tou')
+    for h in history:
+        if h['effective_date'] <= date_str:
+            current_plan = h['plan']
+        else:
+            break
+    return current_plan
+
+def get_active_rate_plan(date_str: Optional[str] = None, conn=None) -> str:
+    """
+    Resolves the active rate plan. If date_str is provided, returns the plan in effect
+    on that date. Otherwise returns the plan in effect for today (or the latest defined transition).
+    """
+    history = get_rate_plan_history(conn=conn)
+    if not history:
+        return 'tou'
+    if date_str:
+        return resolve_plan_for_date(history, date_str)
+    # Today's date in America/Toronto
+    from zoneinfo import ZoneInfo
+    try:
+        today_toronto = datetime.now(ZoneInfo("America/Toronto")).strftime("%Y-%m-%d")
+    except Exception:
+        today_toronto = datetime.now().strftime("%Y-%m-%d")
+    return resolve_plan_for_date(history, today_toronto)
+
 def auto_detect_rate_plan(conn=None) -> str:
     """
-    Auto-detects the enrolled Alectra rate plan from meter data in the DB:
-      - ULO:    tou=4 (ultra-low overnight) intervals exist in readings
-      - Tiered: consumptionTier > 0 intervals exist in readings
-      - TOU:    default (on/mid/off-peak codes 1/2/3 only)
-    Returns 'ulo', 'tiered', or 'tou'.
+    Auto-detects the enrolled Alectra rate plan from rate_plan_history, falling back
+    to meter data in the DB if history is unconfigured.
     """
     try:
+        # 1. Authoritative: rate_plan_history
+        history = get_rate_plan_history(conn=conn)
+        if history and len(history) > 0:
+            return get_active_rate_plan(conn=conn)
+
         def _detect(c):
             # Check for ULO: tou code 4 = ultra-low overnight (ULO customers only)
             row = c.execute(
@@ -297,7 +367,8 @@ def calculate_bill_breakdown(
     tou_summary: Dict[str, Any] = None,
     ulo_summary: Dict[str, Any] = None,
     rates: Dict[str, Any] = None,
-    sample_ts: int = None
+    sample_ts: int = None,
+    plan_windows: List[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     if params is None:
         params = get_billing_parameters()
@@ -319,11 +390,30 @@ def calculate_bill_breakdown(
     monthly_slab = rates['summer_slab_kwh'] if is_summer else rates['winter_slab_kwh']
     effective_slab = max(1.0, (effective_days / 30.0) * monthly_slab)
 
-    # Dynamic Commodity Cost and Splitup based on active_rate_plan
+    # Dynamic Commodity Cost and Splitup based on active_rate_plan or plan_windows
     actual_commodity_cost = commodity_cost
     commodity_split = {}
 
-    if active_rate_plan == 'tiered':
+    if plan_windows and len(plan_windows) > 1:
+        # Multi-window blended billing
+        total_window_cost = sum(w.get('commodity_cost', 0.0) for w in plan_windows)
+        actual_commodity_cost = total_window_cost
+        
+        # Build composite summary description
+        window_descs = []
+        for w in plan_windows:
+            p_name = "TOU" if w['plan'] == 'tou' else ("Tiered" if w['plan'] == 'tiered' else "ULO")
+            window_descs.append(f"{p_name} ({w.get('start_date','')} to {w.get('end_date','')}): {w.get('total_kwh', 0.0):.1f} kWh (${w.get('commodity_cost', 0.0):.2f})")
+        
+        commodity_split = {
+            "plan_id": "blended",
+            "plan_name": "Blended Plan History",
+            "is_blended": True,
+            "windows": plan_windows,
+            "text": " • ".join(window_descs)
+        }
+    elif active_rate_plan == 'tiered':
+        # If single window tiered, prorate slab by days
         t1 = min(total_kwh, effective_slab)
         t2 = max(0.0, total_kwh - effective_slab)
         t1_cost = t1 * rates['tiered_tier1']
@@ -405,6 +495,8 @@ def calculate_bill_breakdown(
 
     return {
         "active_rate_plan": active_rate_plan,
+        "is_blended": bool(plan_windows and len(plan_windows) > 1),
+        "plan_windows": plan_windows or [],
         "commodity_cost": round(actual_commodity_cost, 2),
         "commodity_split": commodity_split,
         "total_kwh": round(total_kwh, 4),
@@ -436,7 +528,9 @@ def calculate_plan_advisor(
     rates: Dict[str, Any] = None,
     sample_ts: int = None,
     active_rate_plan: str = 'tou',
-    billing_params: Dict[str, Any] = None
+    billing_params: Dict[str, Any] = None,
+    actual_bill_total: float = None,
+    plan_windows: List[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     if total_kwh <= 0.0:
         return None
@@ -532,11 +626,19 @@ def calculate_plan_advisor(
 
     active_plan_obj = next((p for p in plan_costs if p["id"] == active_rate_plan), plan_costs[0])
     best_plan = min(plan_costs, key=lambda p: p["cost"])
-    savings_vs_active = max(0.0, round(active_plan_obj["cost"] - best_plan["cost"], 2))
-    is_active_best = (active_rate_plan == best_plan["id"])
+    is_blended = bool(plan_windows and len(plan_windows) > 1)
+    baseline_cost = actual_bill_total if (is_blended and actual_bill_total is not None) else active_plan_obj["cost"]
+    savings_vs_active = max(0.0, round(baseline_cost - best_plan["cost"], 2))
+    is_active_best = (baseline_cost <= best_plan["cost"] + 0.05) if is_blended else (active_rate_plan == best_plan["id"])
 
-    # Build context-aware advice comparing to active plan
-    if is_active_best:
+    # Build context-aware advice comparing to active plan or blended historical
+    if is_blended:
+        window_summary_str = " → ".join(f"{w['plan'].upper()} (from {w.get('start_date','')})" for w in plan_windows)
+        if is_active_best:
+            insight_text = f"Your blended historical billing across your plan transitions ({window_summary_str}) totaled ${baseline_cost:.2f} CAD, which is already optimized against full single-plan rates."
+        else:
+            insight_text = f"Your blended historical billing across plan transitions ({window_summary_str}) was ${baseline_cost:.2f} CAD. If you had been entirely on {best_plan['name']} (${best_plan['cost']:.2f}) for this full {effective_days:.0f}-day period, you would have saved ~${savings_vs_active:.2f} CAD."
+    elif is_active_best:
         if best_plan["id"] == "tiered":
             insight_text = f"You are currently on Tiered Pricing, which is already your most cost-effective option (${best_plan['cost']:.2f} total bill). With {effective_slab:.0f} kWh {season_name} slab for {effective_days:.0f} days, your habits maximize savings without peak penalties."
         elif best_plan["id"] == "ulo":
@@ -549,6 +651,8 @@ def calculate_plan_advisor(
 
     return {
         "active_rate_plan": active_rate_plan,
+        "is_blended": is_blended,
+        "baseline_cost": round(baseline_cost, 2),
         "is_active_best": is_active_best,
         "recommended_plan": best_plan["name"],
         "recommended_id": best_plan["id"],
@@ -839,7 +943,7 @@ def start_daily_scraper():
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
 
-APP_VERSION = "v1.1.1"
+APP_VERSION = "v1.2.0"
 
 # API Endpoints
 @app.on_event("startup")
@@ -1010,6 +1114,72 @@ def api_update_billing_rates(rates: OebRatesModel):
 def api_reset_billing_rates():
     defaults = reset_oeb_rates()
     return {"status": "success", "message": "OEB rate schedule reset to defaults", "rates": defaults}
+
+# Rate Plan History API Endpoints
+class RatePlanTransitionModel(BaseModel):
+    plan: str
+    effective_date: str # 'YYYY-MM-DD'
+
+@app.get("/api/billing/plan-history")
+def api_get_plan_history():
+    history = get_rate_plan_history()
+    active_plan = get_active_rate_plan()
+    return {
+        "status": "success",
+        "active_plan": active_plan,
+        "history": history
+    }
+
+@app.post("/api/billing/plan-history")
+def api_add_or_update_plan_transition(item: RatePlanTransitionModel):
+    plan = item.plan.lower().strip()
+    if plan not in ('tou', 'tiered', 'ulo'):
+        return {"status": "error", "message": f"Invalid plan: {plan}. Must be tou, tiered, or ulo."}
+    
+    date_str = item.effective_date.strip()
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return {"status": "error", "message": f"Invalid date format: {date_str}. Must be YYYY-MM-DD."}
+    
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO rate_plan_history (plan, effective_date) VALUES (?, ?)",
+            (plan, date_str)
+        )
+        # Update settings.active_rate_plan for fallback parity
+        active = get_active_rate_plan(conn=conn)
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('active_rate_plan', ?)", (active,))
+        
+    return {
+        "status": "success",
+        "message": f"Rate plan transition saved ({plan} effective {date_str})",
+        "active_plan": get_active_rate_plan(),
+        "history": get_rate_plan_history()
+    }
+
+@app.delete("/api/billing/plan-history/{item_id}")
+def api_delete_plan_transition(item_id: int):
+    with get_db() as conn:
+        row = conn.execute("SELECT id, plan, effective_date FROM rate_plan_history WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            return {"status": "error", "message": f"Transition with id {item_id} not found."}
+        
+        # Don't delete the only baseline if count is 1
+        count = conn.execute("SELECT COUNT(*) FROM rate_plan_history").fetchone()[0]
+        if count <= 1:
+            return {"status": "error", "message": "Cannot delete the sole baseline rate plan record."}
+            
+        conn.execute("DELETE FROM rate_plan_history WHERE id = ?", (item_id,))
+        active = get_active_rate_plan(conn=conn)
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('active_rate_plan', ?)", (active,))
+        
+    return {
+        "status": "success",
+        "message": f"Transition deleted",
+        "active_plan": get_active_rate_plan(),
+        "history": get_rate_plan_history()
+    }
 
 
 @app.post("/api/reimport")
@@ -1326,6 +1496,15 @@ def get_data(
         consumption_map = {}
         production_map = {}
 
+        # Plan history resolution for series dynamic bucketing
+        plan_history = get_rate_plan_history(conn=conn)
+        from zoneinfo import ZoneInfo
+        try:
+            tz_toronto = ZoneInfo("America/Toronto")
+        except Exception:
+            tz_toronto = timezone.utc
+        rates = get_oeb_rates()
+
         if resolution == "15min":
             query = f"""
                 SELECT (timestamp + {drift_sec}) * 1000 AS time_ms, category, tou, tier, value, cost 
@@ -1347,12 +1526,23 @@ def get_data(
                     b = consumption_map[time_ms]
                     b['total'] += val
                     b['cost'] += cost
-                    tou_key = tou if tou in [1, 2, 3, 4] else 0
-                    b['tou'][tou_key] += val
-                    b['tou_cost'][tou_key] += cost
-                    tier_key = tier if tier in [1, 2, 3] else 0
-                    b['tier'][tier_key] += val
-                    b['tier_cost'][tier_key] += cost
+
+                    # Determine active plan for this interval timestamp
+                    dt_local = datetime.fromtimestamp(time_ms / 1000.0, tz=tz_toronto)
+                    interval_plan = resolve_plan_for_date(plan_history, dt_local.strftime("%Y-%m-%d"))
+
+                    if interval_plan == 'tiered':
+                        # Dynamic assignment: populate tier bucket (Tier 1 vs Tier 2)
+                        # Default interval in tiered plan goes to tier 1 (or xml tier if tagged)
+                        tier_key = tier if tier in [1, 2] else 1
+                        b['tier'][tier_key] += val
+                        rate_val = rates['tiered_tier1'] if tier_key == 1 else rates['tiered_tier2']
+                        b['tier_cost'][tier_key] += val * rate_val
+                    else:
+                        # TOU or ULO
+                        tou_key = tou if tou in [1, 2, 3, 4] else 0
+                        b['tou'][tou_key] += val
+                        b['tou_cost'][tou_key] += cost
                 elif cat == "production":
                     if time_ms not in production_map:
                         production_map[time_ms] = {'total': 0.0, 'cost': 0.0}
@@ -1390,12 +1580,20 @@ def get_data(
                     b = consumption_map[time_ms]
                     b['total'] += val
                     b['cost'] += cost
-                    tou_key = tou if tou in [1, 2, 3, 4] else 0
-                    b['tou'][tou_key] += val
-                    b['tou_cost'][tou_key] += cost
-                    tier_key = tier if tier in [1, 2, 3] else 0
-                    b['tier'][tier_key] += val
-                    b['tier_cost'][tier_key] += cost
+
+                    # Determine active plan for this aggregated bucket
+                    dt_local = datetime.fromtimestamp(time_ms / 1000.0, tz=tz_toronto)
+                    bucket_plan = resolve_plan_for_date(plan_history, dt_local.strftime("%Y-%m-%d"))
+
+                    if bucket_plan == 'tiered':
+                        tier_key = tier if tier in [1, 2] else 1
+                        b['tier'][tier_key] += val
+                        rate_val = rates['tiered_tier1'] if tier_key == 1 else rates['tiered_tier2']
+                        b['tier_cost'][tier_key] += val * rate_val
+                    else:
+                        tou_key = tou if tou in [1, 2, 3, 4] else 0
+                        b['tou'][tou_key] += val
+                        b['tou_cost'][tou_key] += cost
                 elif cat == "production":
                     if time_ms not in production_map:
                         production_map[time_ms] = {'total': 0.0, 'cost': 0.0}
@@ -1452,12 +1650,140 @@ def get_data(
 
         billing_params = get_billing_parameters()
         oeb_rates = get_oeb_rates()
-        active_plan = billing_params.get('active_rate_plan', 'tou')
+        plan_history = get_rate_plan_history(conn=conn)
+        active_plan = get_active_rate_plan(conn=conn)
+
+        # Multi-window date analysis
+        # Partition all consumption intervals by the plan in effect on each day
+        from zoneinfo import ZoneInfo
+        try:
+            tz_toronto = ZoneInfo("America/Toronto")
+        except Exception:
+            tz_toronto = timezone.utc
+
+        # Fetch all consumption intervals in queried range with timestamp and values for window partitioning
+        raw_intervals_query = f"""
+            SELECT timestamp, value, tou, cost
+            FROM readings
+            {filter_str_consumption}
+            ORDER BY timestamp ASC
+        """
+        all_cons_rows = conn.execute(raw_intervals_query, params).fetchall()
+
+        # Group intervals by plan window
+        # We find distinct calendar dates and their corresponding plan
+        day_buckets = {} # date_str -> {'ts': ts, 'total_kwh': 0.0, 'tou': {1:0, 2:0, 3:0, 4:0, 0:0}, 'plan': plan, 'dt': dt}
+        for row in all_cons_rows:
+            ts_sec = row['timestamp'] + drift_sec
+            dt_local = datetime.fromtimestamp(ts_sec, tz=tz_toronto)
+            d_str = dt_local.strftime("%Y-%m-%d")
+            if d_str not in day_buckets:
+                day_buckets[d_str] = {
+                    'date': d_str,
+                    'dt': dt_local,
+                    'total_kwh': 0.0,
+                    'tou': {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 0: 0.0},
+                    'ulo': {'overnight': 0.0, 'off_peak': 0.0, 'mid_peak': 0.0, 'on_peak': 0.0},
+                    'plan': resolve_plan_for_date(plan_history, d_str)
+                }
+            b = day_buckets[d_str]
+            v = row['value'] or 0.0
+            b['total_kwh'] += v
+            t_code = row['tou'] if row['tou'] in (1, 2, 3, 4) else 0
+            b['tou'][t_code] += v
+            slot = ontario_holidays.classify_ulo_slot(dt_local)
+            b['ulo'][slot] = b['ulo'].get(slot, 0.0) + v
+
+        # Aggregate consecutive day buckets with the same active plan into windows
+        plan_windows = []
+        sorted_dates = sorted(day_buckets.keys())
+        for d_str in sorted_dates:
+            dbk = day_buckets[d_str]
+            p = dbk['plan']
+            if not plan_windows or plan_windows[-1]['plan'] != p:
+                plan_windows.append({
+                    'plan': p,
+                    'start_date': d_str,
+                    'end_date': d_str,
+                    'days_count': 1,
+                    'total_kwh': dbk['total_kwh'],
+                    'tou_summary': dict(dbk['tou']),
+                    'ulo_summary': dict(dbk['ulo']),
+                    'month_counts': {dbk['dt'].month: 1}
+                })
+            else:
+                curr = plan_windows[-1]
+                curr['end_date'] = d_str
+                curr['days_count'] += 1
+                curr['total_kwh'] += dbk['total_kwh']
+                for tk, tv in dbk['tou'].items():
+                    curr['tou_summary'][tk] = curr['tou_summary'].get(tk, 0.0) + tv
+                for uk, uv in dbk['ulo'].items():
+                    curr['ulo_summary'][uk] = curr['ulo_summary'].get(uk, 0.0) + uv
+                m = dbk['dt'].month
+                curr['month_counts'][m] = curr['month_counts'].get(m, 0) + 1
+
+        # Calculate commodity charges for each plan window
+        for w in plan_windows:
+            w_plan = w['plan']
+            w_kwh = w['total_kwh']
+            w_cost = 0.0
+            if w_plan == 'tou':
+                c_on = w['tou_summary'].get(1, 0.0) * oeb_rates['tou_on_peak']
+                c_mid = w['tou_summary'].get(2, 0.0) * oeb_rates['tou_mid_peak']
+                c_off = (w['tou_summary'].get(3, 0.0) + w['tou_summary'].get(4, 0.0) + w['tou_summary'].get(0, 0.0)) * oeb_rates['tou_off_peak']
+                w_cost = c_on + c_mid + c_off
+                w['breakdown'] = {
+                    'on_peak_kwh': round(w['tou_summary'].get(1, 0.0), 2),
+                    'mid_peak_kwh': round(w['tou_summary'].get(2, 0.0), 2),
+                    'off_peak_kwh': round(w['tou_summary'].get(3, 0.0) + w['tou_summary'].get(4, 0.0) + w['tou_summary'].get(0, 0.0), 2),
+                    'commodity_cost': round(w_cost, 2)
+                }
+            elif w_plan == 'ulo':
+                c_ovn = w['ulo_summary'].get('overnight', 0.0) * oeb_rates['ulo_ultra_low_overnight']
+                c_off = w['ulo_summary'].get('off_peak', 0.0) * oeb_rates['ulo_off_peak']
+                c_mid = w['ulo_summary'].get('mid_peak', 0.0) * oeb_rates['ulo_mid_peak']
+                c_on = w['ulo_summary'].get('on_peak', 0.0) * oeb_rates['ulo_on_peak']
+                w_cost = c_ovn + c_off + c_mid + c_on
+                w['breakdown'] = {
+                    'overnight_kwh': round(w['ulo_summary'].get('overnight', 0.0), 2),
+                    'off_peak_kwh': round(w['ulo_summary'].get('off_peak', 0.0), 2),
+                    'mid_peak_kwh': round(w['ulo_summary'].get('mid_peak', 0.0), 2),
+                    'on_peak_kwh': round(w['ulo_summary'].get('on_peak', 0.0), 2),
+                    'commodity_cost': round(w_cost, 2)
+                }
+            else: # tiered
+                # Prorated Tier Threshold for the days active in Tiered mode
+                # Determine season from dominant month in window
+                dom_month = max(w['month_counts'], key=w['month_counts'].get) if w['month_counts'] else datetime.now().month
+                is_summer = 5 <= dom_month <= 10
+                monthly_slab = oeb_rates['summer_slab_kwh'] if is_summer else oeb_rates['winter_slab_kwh']
+                # Prorated slab: (days in window / 30.0) * monthly_slab
+                prorated_slab = max(1.0, (w['days_count'] / 30.0) * monthly_slab)
+                t1 = min(w_kwh, prorated_slab)
+                t2 = max(0.0, w_kwh - prorated_slab)
+                t1_cost = t1 * oeb_rates['tiered_tier1']
+                t2_cost = t2 * oeb_rates['tiered_tier2']
+                w_cost = t1_cost + t2_cost
+                w['breakdown'] = {
+                    'tier1_kwh': round(t1, 2),
+                    'tier1_cost': round(t1_cost, 2),
+                    'tier2_kwh': round(t2, 2),
+                    'tier2_cost': round(t2_cost, 2),
+                    'effective_slab_kwh': round(prorated_slab, 1),
+                    'commodity_cost': round(w_cost, 2)
+                }
+            w['commodity_cost'] = round(w_cost, 2)
+            w['total_kwh'] = round(w_kwh, 4)
+
+        result["plan_history"] = plan_history
+        result["active_rate_plan"] = active_plan
         result["bill_breakdown"] = calculate_bill_breakdown(
-            total_import, total_import_cost, days_count, billing_params, active_plan, tou_summary, ulo_summary, oeb_rates, sample_ts
+            total_import, total_import_cost, days_count, billing_params, active_plan, tou_summary, ulo_summary, oeb_rates, sample_ts, plan_windows=plan_windows
         )
+        actual_total = result["bill_breakdown"].get("total_amount_due", None)
         result["plan_advisor"] = calculate_plan_advisor(
-            total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan, billing_params
+            total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan, billing_params, actual_bill_total=actual_total, plan_windows=plan_windows
         )
 
         # Release memory and arena allocations back to OS

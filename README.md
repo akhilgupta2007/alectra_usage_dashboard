@@ -341,7 +341,20 @@ Open `http://127.0.0.1:8000` in your browser.
 
 ## 📜 Release Notes & Changelog
 
-### `v1.1.1` (Latest Release)
+### `v1.2.0` (Latest Release)
+- **Date-Windowed Rate Plan History & Multi-Period Billing Analysis**:
+  - Introduced `rate_plan_history` table enabling users to define exact effective transition dates when switching electricity rate plans (e.g. Standard TOU until Oct 20, Tiered Pricing from Oct 21 onwards).
+  - All historical queries, charts, itemized statements, and hero metrics automatically evaluate intervals against the active plan in effect on each specific calendar date.
+  - Multi-plan periods spanning plan changes display a consolidated `Multi-Plan: TOU → Tiered` badge, composite itemized commodity statements, and prorated monthly tier slabs based on active days.
+  - Smart Rate Advisor enhanced to evaluate blended historical actuals vs counterfactual 100% single-plan scenarios with customized narrative recommendations.
+  - Added REST API endpoints (`GET /api/billing/plan-history`, `POST /api/billing/plan-history`, `DELETE /api/billing/plan-history/{id}`).
+  - Added interactive "Rate Plan History & Effective Dates" management panel inside Dashboard Settings.
+- **Dynamic Series Classification**:
+  - Dynamically classifies raw interval consumption into `tier1` and `tier2` series when under Tiered mode, overcoming Alectra XML's lack of raw interval tier tags.
+- **Android App Synchronization**:
+  - Synchronized Android native app (`alectra_usage_dashboard_android`) with matching `rate_plan_history` SQLite tables, Material 3 DatePicker plan transition editors, and Glance home screen widget updates.
+
+### `v1.1.1`
 - **High-RAM & Memory Footprint Optimization**:
   - Integrated explicit `release_memory()` (forced `gc.collect()` and Linux glibc `malloc_trim(0)`) directly into `/api/data` requests to release allocated pymalloc arenas back to the host OS immediately upon completing data queries, preventing idle RAM accumulation.
   - Reduced SQLite `PRAGMA cache_size` to 3 MB (`-3000`) and added `PRAGMA wal_autocheckpoint=500` to prevent WAL journal log bloat from consuming container memory.

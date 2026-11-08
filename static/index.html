@@ -26,7 +26,7 @@
                 <img src="logo.png" alt="Alectra Energy Dashboard" class="logo-brand-img" width="38" height="38" style="width: 38px; height: 38px; min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; object-fit: cover; flex-shrink: 0; border-radius: 10px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <h1>Green Button <span>Energy Dashboard</span></h1>
-                    <span class="badge" style="font-size: 0.68rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 7px; border-radius: 12px; font-weight: 600;">v1.1.1</span>
+                    <span class="badge" style="font-size: 0.68rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 7px; border-radius: 12px; font-weight: 600;">v1.2.0</span>
                 </div>
             </div>
             
@@ -504,7 +504,7 @@
                 <div class="modal-header">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <h2><i data-lucide="settings"></i> Dashboard Settings</h2>
-                        <span style="font-size: 0.72rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 7px; border-radius: 12px; font-weight: 600;">v1.1.1</span>
+                        <span style="font-size: 0.72rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 7px; border-radius: 12px; font-weight: 600;">v1.2.0</span>
                     </div>
                     <button class="btn btn-icon btn-close" id="btnCloseSettings">
                         <i data-lucide="x"></i>
@@ -656,6 +656,56 @@
                                 </button>
                             </div>
                         </form>
+
+                        <!-- Rate Plan Transitions & History Management -->
+                        <div class="settings-section mt-4 pt-3 border-top">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <div>
+                                    <h3 style="margin:0;"><i data-lucide="calendar-clock"></i> Rate Plan History &amp; Effective Dates</h3>
+                                    <span class="form-help">Specify the exact date you switched plans (e.g. TOU until Oct 20, Tiered from Oct 21). Historical analyses and billing calculations automatically apply the active plan window.</span>
+                                </div>
+                            </div>
+
+                            <!-- Add Transition Inline Form -->
+                            <form id="addPlanTransitionForm" class="mt-2" style="background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.2);">
+                                <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+                                    <div style="flex: 1; min-width: 140px;">
+                                        <span class="form-label-small">Rate Plan</span>
+                                        <select id="newPlanSelect" class="form-control" required>
+                                            <option value="tou">Standard Time-of-Use (TOU)</option>
+                                            <option value="tiered">Tiered Pricing</option>
+                                            <option value="ulo">Ultra-Low Overnight (ULO)</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 1; min-width: 140px;">
+                                        <span class="form-label-small">Effective Date</span>
+                                        <input type="date" id="newPlanEffectiveDate" class="form-control" required>
+                                    </div>
+                                    <div>
+                                        <button type="submit" class="btn btn-primary" id="btnAddPlanTransition" style="height: 38px;">
+                                            <i data-lucide="plus"></i> Add Plan Transition
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- Plan History Table -->
+                            <div class="table-responsive mt-3" style="max-height: 220px; overflow-y: auto;">
+                                <table class="table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.2); text-align: left; color: #94a3b8;">
+                                            <th style="padding: 6px 8px;">Effective Date</th>
+                                            <th style="padding: 6px 8px;">Rate Plan</th>
+                                            <th style="padding: 6px 8px;">Status</th>
+                                            <th style="padding: 6px 8px; text-align: right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="planHistoryTableBody">
+                                        <!-- Rendered dynamically by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Tab 3: OEB Rate Schedule -->

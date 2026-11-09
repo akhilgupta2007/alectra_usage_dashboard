@@ -114,3 +114,37 @@ def classify_ulo_slot(dt: datetime) -> str:
         return 'on_peak'
     else:
         return 'mid_peak'
+
+def classify_tou_slot(dt: datetime) -> str:
+    """
+    Classifies a localized datetime into one of Ontario's 3 official Standard Time-of-Use (TOU) slots:
+    'off_peak', 'mid_peak', 'on_peak'.
+    - Weekends & statutory holidays: 100% off_peak all day.
+    - Summer (May 1 - Oct 31) Weekdays:
+        7:00-11:00: mid_peak
+        11:00-17:00: on_peak
+        17:00-19:00: mid_peak
+        19:00-7:00: off_peak
+    - Winter (Nov 1 - Apr 30) Weekdays:
+        7:00-11:00: on_peak
+        11:00-17:00: mid_peak
+        17:00-19:00: on_peak
+        19:00-7:00: off_peak
+    """
+    if is_holiday_or_weekend(dt.date()):
+        return 'off_peak'
+    hour = dt.hour
+    if hour < 7 or hour >= 19:
+        return 'off_peak'
+    is_summer = 5 <= dt.month <= 10
+    if is_summer:
+        if 11 <= hour < 17:
+            return 'on_peak'
+        else:
+            return 'mid_peak'
+    else:
+        if (7 <= hour < 11) or (17 <= hour < 19):
+            return 'on_peak'
+        else:
+            return 'mid_peak'
+

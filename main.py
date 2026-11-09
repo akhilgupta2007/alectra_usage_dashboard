@@ -1410,6 +1410,9 @@ def get_data(
         ulo_off_peak_kwh = 0.0
         ulo_mid_peak_kwh = 0.0
         ulo_on_peak_kwh = 0.0
+        cf_tou_on_peak = 0.0
+        cf_tou_mid_peak = 0.0
+        cf_tou_off_peak = 0.0
         sample_ts = None
 
         for ur in ulo_rows:
@@ -1428,11 +1431,27 @@ def get_data(
             else:
                 ulo_mid_peak_kwh += v
 
+            # TOU classification across all intervals for fair 100% counterfactual simulation
+            tou_slot = ontario_holidays.classify_tou_slot(dt)
+            if tou_slot == 'on_peak':
+                cf_tou_on_peak += v
+            elif tou_slot == 'mid_peak':
+                cf_tou_mid_peak += v
+            else:
+                cf_tou_off_peak += v
+
         ulo_summary = {
             "ultra_low_overnight_kwh": round(ulo_overnight_kwh, 4),
             "off_peak_kwh": round(ulo_off_peak_kwh, 4),
             "mid_peak_kwh": round(ulo_mid_peak_kwh, 4),
             "on_peak_kwh": round(ulo_on_peak_kwh, 4)
+        }
+
+        counterfactual_tou_summary = {
+            "on_peak_kwh": round(cf_tou_on_peak, 4),
+            "mid_peak_kwh": round(cf_tou_mid_peak, 4),
+            "off_peak_kwh": round(cf_tou_off_peak, 4),
+            "ulo_kwh": 0.0
         }
             
         # Capture actual date range of the queried data for frontend display
@@ -1824,7 +1843,7 @@ def get_data(
         )
         actual_total = result["bill_breakdown"].get("total_amount_due", None)
         result["plan_advisor"] = calculate_plan_advisor(
-            total_import, tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan, billing_params, actual_bill_total=actual_total, plan_windows=plan_windows
+            total_import, counterfactual_tou_summary, ulo_summary, days_count, oeb_rates, sample_ts, active_plan, billing_params, actual_bill_total=actual_total, plan_windows=plan_windows
         )
 
         # Release memory and arena allocations back to OS

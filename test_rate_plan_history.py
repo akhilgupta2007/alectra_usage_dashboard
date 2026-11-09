@@ -77,6 +77,38 @@ class TestRatePlanHistory(unittest.TestCase):
         self.assertTrue('Blended' in breakdown['commodity_split']['plan_name'])
         self.assertGreater(breakdown['total_amount_due'], breakdown['commodity_cost'])
 
+    def test_get_data_with_mixed_plans(self):
+        # Insert transition on 2026-10-21 -> tiered
+        with main.get_db() as conn:
+            conn.execute("INSERT INTO rate_plan_history (plan, effective_date) VALUES ('tiered', '2026-10-21')")
+            
+            # Insert readings: 1 interval on Oct 15 (TOU), 1 interval on Oct 25 (Tiered)
+            # Oct 15, 2026 12:00 UTC = 1792065600
+            # Oct 25, 2026 12:00 UTC = 1792929600
+            conn.execute("""
+                INSERT INTO readings (timestamp, category, tou, tier, value, cost)
+                VALUES (1792065600, 'consumption', 1, 0, 10.0, 2.03)
+            """)
+            conn.execute("""
+                INSERT INTO readings (timestamp, category, tou, tier, value, cost)
+                VALUES (1792929600, 'consumption', 0, 0, 15.0, 1.80)
+            """)
+            conn.commit()
+
+        data = main.get_data(resolution="1d", start=1792000000, end=1793000000)
+        
+        # Verify tou_summary reflects Oct 15 (TOU) and tier_summary reflects Oct 25 (Tiered)
+        self.assertGreater(data["tou_summary"]["on_peak_kwh"], 0.0)
+        self.assertGreater(data["tier_summary"]["tier1_kwh"], 0.0)
+        
+        # Verify breakdowns contain non-zero points
+        tou_points = [p[1] for p in data["tou_breakdown"]["on_peak"] if p[1] > 0]
+        tier_points = [p[1] for p in data["tier_breakdown"]["tier1"] if p[1] > 0]
+        self.assertEqual(len(tou_points), 1)
+        self.assertEqual(len(tier_points), 1)
+        self.assertEqual(tou_points[0], 10.0)
+        self.assertEqual(tier_points[0], 15.0)
+
 if __name__ == '__main__':
     unittest.main()
 

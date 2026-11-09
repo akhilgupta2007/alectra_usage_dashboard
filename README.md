@@ -341,7 +341,15 @@ Open `http://127.0.0.1:8000` in your browser.
 
 ## 📜 Release Notes & Changelog
 
-### `v1.2.0` (Latest Release)
+### `v1.2.1` (Latest Release)
+- **Fix Post-Transition Chart Rendering on Plan Transitions (Mixed TOU & Tiered Periods)**:
+  - Fixed issue where the Electricity Import & Export chart rendered blank bars after an effective plan transition date (e.g. switching from TOU to Tiered Pricing on Oct 21).
+  - Resolved chart series mutual exclusion in `static/app.js`: when a queried range spans multiple plans, ApexCharts now loads both TOU series (`Off-Peak`, `Mid-Peak`, `On-Peak`, `ULO`) and Tiered series (`Tier 1`, `Tier 2`), allowing stacked bars to seamlessly transition from TOU color-coding to Tiered color-coding at the exact transition boundary.
+  - Dynamically synthesizes `tier_summary` and `tou_summary` in `/api/data` from calculated plan windows rather than relying on raw SQLite `GROUP BY` where `tier` is 0 in Alectra XML.
+  - Rate legend badges now dynamically display both TOU and Tier badges during blended / transition periods.
+  - Hover tooltips filtered to display only active non-zero series to prevent zero-value clutter on mixed-plan dates.
+
+### `v1.2.0`
 - **Date-Windowed Rate Plan History & Multi-Period Billing Analysis**:
   - Introduced `rate_plan_history` table enabling users to define exact effective transition dates when switching electricity rate plans (e.g. Standard TOU until Oct 20, Tiered Pricing from Oct 21 onwards).
   - All historical queries, charts, itemized statements, and hero metrics automatically evaluate intervals against the active plan in effect on each specific calendar date.

@@ -713,18 +713,27 @@ function renderChart(data) {
     
     const totalExport = (data.production || []).reduce((acc, curr) => acc + (curr[1] || 0), 0);
     
-    const hasTOU = data.tou_summary && (
+    const hasTOU = (data.tou_breakdown && (
+        (data.tou_breakdown.on_peak && data.tou_breakdown.on_peak.some(p => p[1] > 0.0001)) ||
+        (data.tou_breakdown.mid_peak && data.tou_breakdown.mid_peak.some(p => p[1] > 0.0001)) ||
+        (data.tou_breakdown.off_peak && data.tou_breakdown.off_peak.some(p => p[1] > 0.0001)) ||
+        (data.tou_breakdown.ulo && data.tou_breakdown.ulo.some(p => p[1] > 0.0001))
+    )) || (data.tou_summary && (
         (data.tou_summary.on_peak_kwh || 0) > 0 || 
         (data.tou_summary.mid_peak_kwh || 0) > 0 || 
         (data.tou_summary.off_peak_kwh || 0) > 0 || 
         (data.tou_summary.ulo_kwh || 0) > 0
-    );
+    ));
     
-    const hasTier = data.tier_summary && (
+    const hasTier = (data.tier_breakdown && (
+        (data.tier_breakdown.tier1 && data.tier_breakdown.tier1.some(p => p[1] > 0.0001)) ||
+        (data.tier_breakdown.tier2 && data.tier_breakdown.tier2.some(p => p[1] > 0.0001)) ||
+        (data.tier_breakdown.tier3 && data.tier_breakdown.tier3.some(p => p[1] > 0.0001))
+    )) || (data.tier_summary && (
         (data.tier_summary.tier1_kwh || 0) > 0 || 
         (data.tier_summary.tier2_kwh || 0) > 0 || 
         (data.tier_summary.tier3_kwh || 0) > 0
-    );
+    ));
 
     if (currentView === 'energy') {
         yAxisTitle = 'Energy (kWh)';
@@ -737,24 +746,29 @@ function renderChart(data) {
     }
     
     // Always render rate-coded series when rate metadata is available
-    if ((hasTOU || hasTier) && data.tou_breakdown) {
+    if ((hasTOU || hasTier) && (data.tou_breakdown || data.tier_breakdown)) {
         if (rateLegendBar) rateLegendBar.style.display = 'flex';
         
-        if (hasTOU) {
-            // Show TOU Badges
-            document.querySelectorAll('.rate-legend-bar .badge-onpeak, .rate-legend-bar .badge-midpeak, .rate-legend-bar .badge-offpeak').forEach(el => el.style.display = 'inline-flex');
-            if (legendUlo) legendUlo.style.display = (data.tou_summary.ulo_kwh > 0) ? 'inline-flex' : 'none';
-            if (legendTier1) legendTier1.style.display = 'none';
-            if (legendTier2) legendTier2.style.display = 'none';
-            
-            if (showImport) {
+        // Show/hide TOU badges
+        document.querySelectorAll('.rate-legend-bar .badge-onpeak, .rate-legend-bar .badge-midpeak, .rate-legend-bar .badge-offpeak')
+            .forEach(el => el.style.display = hasTOU ? 'inline-flex' : 'none');
+        const hasUloData = hasTOU && ((data.tou_summary && data.tou_summary.ulo_kwh > 0) || (data.tou_breakdown && data.tou_breakdown.ulo && data.tou_breakdown.ulo.some(p => p[1] > 0.0001)));
+        if (legendUlo) legendUlo.style.display = hasUloData ? 'inline-flex' : 'none';
+        
+        // Show/hide Tier badges
+        if (legendTier1) legendTier1.style.display = hasTier ? 'inline-flex' : 'none';
+        const hasTier2Data = hasTier && ((data.tier_summary && data.tier_summary.tier2_kwh > 0) || (data.tier_breakdown && data.tier_breakdown.tier2 && data.tier_breakdown.tier2.some(p => p[1] > 0.0001)));
+        if (legendTier2) legendTier2.style.display = hasTier2Data ? 'inline-flex' : 'none';
+        
+        if (showImport) {
+            if (hasTOU && data.tou_breakdown) {
                 if (currentView === 'energy') {
                     series.push({
                         name: 'Off-Peak',
                         data: data.tou_breakdown.off_peak || [],
                         color: '#10b981'
                     });
-                    if ((data.tou_summary.ulo_kwh || 0) > 0) {
+                    if (hasUloData) {
                         series.push({
                             name: 'Ultra-Low Overnight',
                             data: data.tou_breakdown.ulo || [],
@@ -777,7 +791,7 @@ function renderChart(data) {
                         data: data.tou_breakdown.off_peak_cost || [],
                         color: '#10b981'
                     });
-                    if ((data.tou_summary.ulo_cost || 0) > 0) {
+                    if (hasUloData) {
                         series.push({
                             name: 'ULO Cost',
                             data: data.tou_breakdown.ulo_cost || [],
@@ -796,28 +810,21 @@ function renderChart(data) {
                     });
                 }
             }
-        } else if (hasTier && data.tier_breakdown) {
-            // Show Tier Badges
-            document.querySelectorAll('.rate-legend-bar .badge-onpeak, .rate-legend-bar .badge-midpeak, .rate-legend-bar .badge-offpeak').forEach(el => el.style.display = 'none');
-            if (legendUlo) legendUlo.style.display = 'none';
-            if (legendTier1) legendTier1.style.display = 'inline-flex';
-            if (legendTier2) legendTier2.style.display = (data.tier_summary.tier2_kwh > 0) ? 'inline-flex' : 'none';
-            
-            if (showImport) {
+            if (hasTier && data.tier_breakdown) {
                 if (currentView === 'energy') {
                     series.push({
                         name: 'Tier 1',
                         data: data.tier_breakdown.tier1 || [],
                         color: '#38bdf8'
                     });
-                    if ((data.tier_summary.tier2_kwh || 0) > 0) {
+                    if (hasTier2Data) {
                         series.push({
                             name: 'Tier 2',
                             data: data.tier_breakdown.tier2 || [],
                             color: '#f59e0b'
                         });
                     }
-                    if ((data.tier_summary.tier3_kwh || 0) > 0) {
+                    if ((data.tier_summary && data.tier_summary.tier3_kwh > 0) || (data.tier_breakdown.tier3 && data.tier_breakdown.tier3.some(p => p[1] > 0.0001))) {
                         series.push({
                             name: 'Tier 3',
                             data: data.tier_breakdown.tier3 || [],
@@ -830,14 +837,14 @@ function renderChart(data) {
                         data: data.tier_breakdown.tier1_cost || [],
                         color: '#38bdf8'
                     });
-                    if ((data.tier_summary.tier2_cost || 0) > 0) {
+                    if (hasTier2Data) {
                         series.push({
                             name: 'Tier 2 Cost',
                             data: data.tier_breakdown.tier2_cost || [],
                             color: '#f59e0b'
                         });
                     }
-                    if ((data.tier_summary.tier3_cost || 0) > 0) {
+                    if ((data.tier_summary && data.tier_summary.tier3_cost > 0) || (data.tier_breakdown.tier3_cost && data.tier_breakdown.tier3_cost.some(p => p[1] > 0.0001))) {
                         series.push({
                             name: 'Tier 3 Cost',
                             data: data.tier_breakdown.tier3_cost || [],
@@ -1020,20 +1027,19 @@ function renderChart(data) {
                             importTotal += val;
                         }
                         
-                        if (val > 0) {
+                        if (val > 0.0001 || series.length === 1) {
                             activeSeriesCount++;
-                        }
-
-                        const formattedVal = currentView === 'cost' ? '$' + val.toFixed(4) : val.toFixed(3) + ' kWh';
-                        itemsHtml += `
-                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 0; gap: 14px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="width: 9px; height: 9px; border-radius: 50%; background-color: ${color}; display: inline-block;"></span>
-                                    <span style="color: #cbd5e1; font-size: 12px;">${name}</span>
+                            const formattedVal = currentView === 'cost' ? '$' + val.toFixed(4) : val.toFixed(3) + ' kWh';
+                            itemsHtml += `
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 0; gap: 14px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="width: 9px; height: 9px; border-radius: 50%; background-color: ${color}; display: inline-block;"></span>
+                                        <span style="color: #cbd5e1; font-size: 12px;">${name}</span>
+                                    </div>
+                                    <span style="font-weight: 600; color: #f8fafc; font-size: 12px;">${formattedVal}</span>
                                 </div>
-                                <span style="font-weight: 600; color: #f8fafc; font-size: 12px;">${formattedVal}</span>
-                            </div>
-                        `;
+                            `;
+                        }
                     }
                 }
 

@@ -943,7 +943,7 @@ def start_daily_scraper():
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
 
-APP_VERSION = "v1.2.0"
+APP_VERSION = "v1.2.1"
 
 # API Endpoints
 @app.on_event("startup")
@@ -1775,6 +1775,47 @@ def get_data(
                 }
             w['commodity_cost'] = round(w_cost, 2)
             w['total_kwh'] = round(w_kwh, 4)
+
+        # Multi-window accurate synthesis for tou_summary and tier_summary
+        has_tiered = any(w['plan'] == 'tiered' for w in plan_windows)
+        if has_tiered:
+            tier_summary = {
+                "tier1_kwh": round(sum(w['breakdown'].get('tier1_kwh', 0.0) for w in plan_windows if w['plan'] == 'tiered'), 4),
+                "tier1_cost": round(sum(w['breakdown'].get('tier1_cost', 0.0) for w in plan_windows if w['plan'] == 'tiered'), 4),
+                "tier2_kwh": round(sum(w['breakdown'].get('tier2_kwh', 0.0) for w in plan_windows if w['plan'] == 'tiered'), 4),
+                "tier2_cost": round(sum(w['breakdown'].get('tier2_cost', 0.0) for w in plan_windows if w['plan'] == 'tiered'), 4),
+                "tier3_kwh": 0.0,
+                "tier3_cost": 0.0,
+                "other_kwh": 0.0,
+                "other_cost": 0.0
+            }
+            result["tier_summary"] = tier_summary
+
+        has_tou = any(w['plan'] == 'tou' for w in plan_windows)
+        if has_tou:
+            tou_summary = {
+                "on_peak_kwh": round(sum(w['breakdown'].get('on_peak_kwh', 0.0) for w in plan_windows if w['plan'] == 'tou'), 4),
+                "on_peak_cost": round(sum(w['breakdown'].get('on_peak_kwh', 0.0) * oeb_rates['tou_on_peak'] for w in plan_windows if w['plan'] == 'tou'), 4),
+                "mid_peak_kwh": round(sum(w['breakdown'].get('mid_peak_kwh', 0.0) for w in plan_windows if w['plan'] == 'tou'), 4),
+                "mid_peak_cost": round(sum(w['breakdown'].get('mid_peak_kwh', 0.0) * oeb_rates['tou_mid_peak'] for w in plan_windows if w['plan'] == 'tou'), 4),
+                "off_peak_kwh": round(sum(w['breakdown'].get('off_peak_kwh', 0.0) for w in plan_windows if w['plan'] == 'tou'), 4),
+                "off_peak_cost": round(sum(w['breakdown'].get('off_peak_kwh', 0.0) * oeb_rates['tou_off_peak'] for w in plan_windows if w['plan'] == 'tou'), 4),
+                "ulo_kwh": 0.0,
+                "ulo_cost": 0.0,
+                "other_kwh": 0.0,
+                "other_cost": 0.0
+            }
+            result["tou_summary"] = tou_summary
+        elif not has_tou and has_tiered:
+            # Query range has 0 TOU days - zero out TOU summary so TOU is not marked active
+            tou_summary = {
+                "on_peak_kwh": 0.0, "on_peak_cost": 0.0,
+                "mid_peak_kwh": 0.0, "mid_peak_cost": 0.0,
+                "off_peak_kwh": 0.0, "off_peak_cost": 0.0,
+                "ulo_kwh": 0.0, "ulo_cost": 0.0,
+                "other_kwh": 0.0, "other_cost": 0.0
+            }
+            result["tou_summary"] = tou_summary
 
         result["plan_history"] = plan_history
         result["active_rate_plan"] = active_plan
